@@ -1,6 +1,6 @@
 import { useRef, useState, type MutableRefObject, type ReactNode } from 'react'
 import type { Article, CountInput } from '../data/types'
-import { formatNum, formatSize, quantityOf, sizeKey } from '../lib/measure'
+import { formatNum, formatSize, quantityOf, round, sizeKey } from '../lib/measure'
 import { Button } from './ui'
 
 function parse(raw: string): number | null {
@@ -137,11 +137,28 @@ function SimpleInput({
   const value = parse(raw)
   const step = article.allow_decimal ? 0.5 : 1
 
+  // 1070 kg / 750 l is almost certainly grams / ml: ask before saving.
+  const smallUnit = article.unit === 'kg' ? 'g' : article.unit === 'l' ? 'ml' : null
+  const suspicious = smallUnit != null && value != null && value >= 100
+  const [asking, setAsking] = useState(false)
+
+  const save = (v: number) =>
+    onSubmit(article.kind === 'weight' ? { kind: 'weight', value: v } : { kind: 'count', value: v })
+
   const submit = () => {
     if (value == null) return
-    onSubmit(article.kind === 'weight' ? { kind: 'weight', value } : { kind: 'count', value })
+    if (suspicious && !asking) {
+      setAsking(true)
+      return
+    }
+    if (!asking) save(value)
   }
   if (submitRef) submitRef.current = submit
+
+  const changeRaw = (v: string) => {
+    setAsking(false)
+    setRaw(v)
+  }
 
   return (
     <div className="space-y-4">
@@ -149,7 +166,7 @@ function SimpleInput({
         {article.kind === 'count' && (
           <button
             type="button"
-            onClick={() => setRaw(String(Math.max(0, (value ?? 0) - step)))}
+            onClick={() => changeRaw(String(Math.max(0, (value ?? 0) - step)))}
             className="h-[60px] w-14 shrink-0 rounded-xl border-2 border-slate-200 bg-surface text-2xl text-slate-600"
           >
             −
@@ -159,7 +176,7 @@ function SimpleInput({
           <NumberField
             label="Količina"
             value={raw}
-            onChange={setRaw}
+            onChange={changeRaw}
             decimal={decimal}
             suffix={article.unit}
             autoFocus
@@ -169,7 +186,7 @@ function SimpleInput({
         {article.kind === 'count' && (
           <button
             type="button"
-            onClick={() => setRaw(String((value ?? 0) + step))}
+            onClick={() => changeRaw(String((value ?? 0) + step))}
             className="h-[60px] w-14 shrink-0 rounded-xl border-2 border-slate-200 bg-surface text-2xl text-slate-600"
           >
             +
@@ -177,9 +194,30 @@ function SimpleInput({
         )}
       </div>
       {extra}
-      <Button onClick={submit} disabled={value == null} className="w-full py-4 text-lg">
-        {submitLabel}
-      </Button>
+      {asking && value != null && smallUnit ? (
+        <div className="space-y-3 rounded-2xl border-2 border-amber-300 bg-amber-50 p-4">
+          <p className="font-semibold text-amber-900">
+            {formatNum(value)} {article.unit} je mnogo. Da li ste mislili{' '}
+            <strong>{formatNum(value / 1000)} {article.unit}</strong> ({formatNum(value)} {smallUnit})?
+          </p>
+          <Button
+            onClick={() => {
+              setRaw(String(round(value / 1000)))
+              save(round(value / 1000))
+            }}
+            className="w-full py-4 text-lg"
+          >
+            Da, {formatNum(value / 1000)} {article.unit}
+          </Button>
+          <Button variant="ghost" onClick={() => save(value)} className="w-full">
+            Ne, baš {formatNum(value)} {article.unit}
+          </Button>
+        </div>
+      ) : (
+        <Button onClick={submit} disabled={value == null} className="w-full py-4 text-lg">
+          {submitLabel}
+        </Button>
+      )}
     </div>
   )
 }
