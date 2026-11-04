@@ -70,12 +70,12 @@ export function Users() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-bold text-slate-800">Zaposleni</h1>
+      <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Zaposleni</h1>
 
       <Card className="space-y-3">
         <p className="text-sm font-semibold text-slate-600">Novi nalog</p>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ime" />
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ime" onKeyDown={(e) => e.key === 'Enter' && add()} />
           <Select value={role} onChange={(e) => setRole(e.target.value as Role)}>
             <option value="staff">Radnik</option>
             <option value="admin">Admin</option>
@@ -84,6 +84,7 @@ export function Users() {
             value={pin}
             onChange={(e) => setPin(e.target.value)}
             placeholder="PIN"
+            onKeyDown={(e) => e.key === 'Enter' && add()}
             type="password"
             inputMode="numeric"
           />

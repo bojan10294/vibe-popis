@@ -53,7 +53,7 @@ export function ImportPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-bold text-slate-800">Knjigovodstveno stanje (lager lista)</h1>
+      <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Knjigovodstveno stanje (lager lista)</h1>
 
       <Card className="space-y-3 border-amber-200 bg-amber-50/50">
         <p className="text-sm text-amber-800">
@@ -75,7 +75,7 @@ export function ImportPage() {
             onChange={(e) => setText(e.target.value)}
             rows={8}
             placeholder={'560001\tCoca cola\tKOM\t24\t6\t18\t130\t2340\n560002\t...'}
-            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 font-mono text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+            className="w-full rounded-xl border border-slate-300 bg-surface px-3 py-2 font-mono text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
           />
         </label>
         <div className="flex gap-2">

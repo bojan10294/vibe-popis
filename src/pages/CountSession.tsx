@@ -10,7 +10,7 @@ import {
   setCategoryDone,
 } from '../data/repository'
 import type { Article, Count, CountInput, CountLine } from '../data/types'
-import { describeInput } from '../lib/measure'
+import { countedOn, describeInput } from '../lib/measure'
 import { MeasureInput } from '../components/MeasureInput'
 import { Button, Spinner } from '../components/ui'
 
@@ -40,12 +40,15 @@ export function CountSession() {
   useEffect(() => {
     if (!id) return
     ;(async () => {
-      const [c, articles, categories, ls] = await Promise.all([
+      const [c, allArticles, categories, ls] = await Promise.all([
         getCount(id),
         listArticles({ activeOnly: true }),
         listCategories(),
         listLinesForCount(id),
       ])
+      // Weekly articles (glasses, spoons...) only show up on their day.
+      const day = c ? new Date(c.datetime) : new Date()
+      const articles = allArticles.filter((a) => countedOn(a, day))
       const gs: Group[] = categories.map((cat) => ({
         id: cat.id,
         name: cat.name,
@@ -155,7 +158,7 @@ export function CountSession() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="rounded-2xl border border-slate-200 bg-surface p-5 shadow-sm">
           <h1 className="mb-5 text-2xl font-bold text-slate-800">{article.name}</h1>
           <MeasureInput
             key={article.id}
@@ -191,13 +194,13 @@ export function CountSession() {
     return (
       <div className="space-y-4 pb-28">
         <div>
-          <h1 className="text-xl font-bold text-slate-800">Proveri popis</h1>
+          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Proveri popis</h1>
           <p className="text-sm text-slate-500">Dodirni stavku da je ispraviš.</p>
         </div>
         {groups.map((g) => (
           <section key={g.id} className="space-y-1.5">
             <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">{g.name}</h2>
-            <div className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <div className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-surface">
               {g.articles.map((a, i) => {
                 const line = lines.get(a.id)
                 return (
@@ -222,12 +225,12 @@ export function CountSession() {
             </div>
           </section>
         ))}
-        <div className="fixed inset-x-0 bottom-0 z-10 border-t border-slate-200 bg-white px-4 py-3">
+        <div className="fixed inset-x-0 bottom-0 z-10 border-t border-slate-200/70 bg-surface/90 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-xl">
           <div className="mx-auto flex max-w-5xl gap-3">
             <Button variant="ghost" onClick={() => setView({ mode: 'categories' })}>
               Nazad
             </Button>
-            <Button onClick={finish} disabled={finishing} className="flex-1 bg-green-600 hover:bg-green-700">
+            <Button onClick={finish} disabled={finishing} className="flex-1 bg-green-600 hover:brightness-110">
               {finishing ? 'Čuvam...' : '✓ Sve u redu, završi popis'}
             </Button>
           </div>
@@ -240,43 +243,54 @@ export function CountSession() {
   const doneCount = groups.filter((g) => done.has(g.id)).length
   return (
     <div className="space-y-4 pb-28">
-      <div>
-        <h1 className="text-xl font-bold text-slate-800">Popis</h1>
-        <p className="text-sm text-slate-500">
-          Izaberi kategoriju, redom koji ti odgovara. Završeno {doneCount} / {groups.length}.
-        </p>
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Popis</h1>
+          <p className="text-sm text-slate-500">Izaberi kategoriju, redom koji ti odgovara.</p>
+        </div>
+        <span className="shrink-0 rounded-full bg-surface px-3 py-1 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200">
+          {doneCount} / {groups.length}
+        </span>
       </div>
-      <div className="space-y-2">
+      <div className="space-y-2.5">
         {groups.map((g) => {
           const filled = g.articles.filter((a) => lines.has(a.id)).length
           const isDone = done.has(g.id)
           const started = filled > 0
+          const pct = (filled / g.articles.length) * 100
           return (
             <button
               key={g.id}
               onClick={() => openGroup(g)}
-              className={`flex w-full items-center justify-between rounded-2xl border-2 p-4 text-left transition-colors ${
-                isDone
-                  ? 'border-green-300 bg-green-50'
-                  : started
-                    ? 'border-amber-300 bg-amber-50'
-                    : 'border-slate-200 bg-white'
+              className={`w-full rounded-2xl border p-4 text-left shadow-sm transition active:scale-[0.99] ${
+                isDone ? 'border-green-200 bg-green-50' : started ? 'border-amber-200 bg-surface' : 'border-slate-200/80 bg-surface'
               }`}
             >
-              <div>
-                <p className={`text-lg font-semibold ${isDone ? 'text-green-800' : 'text-slate-800'}`}>{g.name}</p>
-                <p className="text-sm text-slate-500">
-                  {filled} / {g.articles.length}
-                </p>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span
+                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-bold ${
+                      isDone ? 'bg-green-600 text-white' : started ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-500'
+                    }`}
+                  >
+                    {isDone ? '✓' : g.articles.length}
+                  </span>
+                  <p className={`truncate text-base font-semibold ${isDone ? 'text-green-800' : 'text-slate-800'}`}>{g.name}</p>
+                </div>
+                <span className={`shrink-0 text-sm font-semibold ${isDone ? 'text-green-700' : 'text-brand-700'}`}>
+                  {isDone ? 'Gotovo' : started ? `${filled}/${g.articles.length} →` : 'Počni →'}
+                </span>
               </div>
-              <span className={`text-sm font-semibold ${isDone ? 'text-green-700' : 'text-brand-700'}`}>
-                {isDone ? '✓ Gotovo' : started ? 'Nastavi →' : 'Počni →'}
-              </span>
+              {started && !isDone && (
+                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                  <div className="h-full rounded-full bg-amber-500" style={{ width: `${pct}%` }} />
+                </div>
+              )}
             </button>
           )
         })}
       </div>
-      <div className="fixed inset-x-0 bottom-0 z-10 border-t border-slate-200 bg-white px-4 py-3">
+      <div className="fixed inset-x-0 bottom-0 z-10 border-t border-slate-200/70 bg-surface/90 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-xl">
         <div className="mx-auto flex max-w-5xl gap-3">
           <Button variant="ghost" onClick={() => navigate('/count')}>
             Izađi

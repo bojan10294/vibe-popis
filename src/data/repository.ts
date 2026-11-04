@@ -1,6 +1,6 @@
 import { run, sb } from './supabase'
 import { uuid } from '../lib/crypto'
-import { effectiveMinimum, orderNeed, quantityOf, round } from '../lib/measure'
+import { needsOrder, noteOf, orderThreshold, quantityOf, round, suggestedQuantity } from '../lib/measure'
 import type {
   Article,
   BookStockImport,
@@ -256,7 +256,12 @@ export async function applyBookStockImport(
         allow_decimal: false,
         bottle_sizes: [],
         minimum: 0,
-        minimum_weekend: null,
+        order_qty: 1,
+        pack_size: 1,
+        weekend_target: null,
+        ask_note: false,
+        count_weekday: null,
+        order_unit: 'kom',
         active: false,
         sort_order: ++maxSort,
         last_unit_price: round(r.cena, 2),
@@ -308,8 +313,8 @@ export async function buildOrderList(countId: string): Promise<OrderLine[]> {
   for (const line of lines) {
     const article = articleById.get(line.article_id)
     if (!article) continue
-    const need = orderNeed(article, line.input, date)
-    if (need <= 0) continue
+    if (!needsOrder(article, line.input, date)) continue
+    const qty = suggestedQuantity(article, line.input, date)
     const prev = prevByArticle.get(article.id)
     toPut.push({
       id: prev?.id ?? uuid(),
@@ -320,10 +325,12 @@ export async function buildOrderList(countId: string): Promise<OrderLine[]> {
       unit: line.unit,
       kind: article.kind,
       counted: line.counted,
-      minimum: article.kind === 'yes_no' ? 0 : effectiveMinimum(article, date),
-      suggested_order_qty: prev?.suggested_order_qty ?? need,
+      minimum: article.kind === 'yes_no' ? 0 : orderThreshold(article, date),
+      suggested_order_qty: prev?.suggested_order_qty ?? qty,
+      order_unit: prev?.order_unit ?? article.order_unit,
       for_date: prev?.for_date ?? new Date().toISOString().slice(0, 10),
       order_status: prev?.order_status ?? 'pending',
+      note: noteOf(line.input) || null,
     })
   }
 

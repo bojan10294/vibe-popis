@@ -8,6 +8,11 @@ export const KIND_LABELS: Record<MeasureKind, string> = {
   espresso: 'Espreso (aparat + kese)',
 }
 
+/** The worker's "what is missing" text, trimmed; empty string when none. */
+export function noteOf(input: CountInput | null | undefined): string {
+  return input?.note?.trim() ?? ''
+}
+
 export function round(n: number, dp = 3): number {
   const f = 10 ** dp
   return Math.round((n + Number.EPSILON) * f) / f
@@ -60,30 +65,64 @@ export function unitLabel(article: Pick<Article, 'kind' | 'unit'>): Unit {
   return article.unit
 }
 
-/** Fri, Sat, Sun use the weekend minimum (when set). */
-export function isWeekend(date: Date): boolean {
-  const d = date.getDay()
-  return d === 5 || d === 6 || d === 0
+/** Index = getDay(); used as "Samo {WEEKDAYS_ON[d]}". */
+export const WEEKDAYS_ON = ['nedeljom', 'ponedeljkom', 'utorkom', 'sredom', 'četvrtkom', 'petkom', 'subotom']
+
+/** Whether the article is in a count started on `date` (weekly articles only on their day). */
+export function countedOn(article: Pick<Article, 'count_weekday'>, date: Date): boolean {
+  return article.count_weekday == null || article.count_weekday === date.getDay()
 }
 
-export function effectiveMinimum(article: Article, date: Date): number {
-  if (article.minimum_weekend != null && isWeekend(date)) return article.minimum_weekend
-  return article.minimum
+/**
+ * There are no deliveries on Saturday and Sunday, so the Thursday count orders
+ * for the whole weekend.
+ */
+export function isWeekendOrderDay(date: Date): boolean {
+  return date.getDay() === 4
 }
 
-/** How much to order, or 0 if nothing is needed. */
-export function orderNeed(article: Article, input: CountInput | null, date: Date): number {
+/** True when this count orders up to the weekend target instead of the regular rule. */
+export function usesWeekendTarget(article: Article, date: Date): boolean {
+  return article.kind !== 'yes_no' && article.weekend_target != null && isWeekendOrderDay(date)
+}
+
+/** The stock level the order is based on: weekend target on Thursday, else the minimum. */
+export function orderThreshold(article: Article, date: Date): number {
+  return usesWeekendTarget(article, date) ? article.weekend_target! : article.minimum
+}
+
+/**
+ * How many order units (paket, gajba, flaša...) to order, or 0.
+ *  - Thursday with a weekend target: enough whole packs to reach the target.
+ *  - Otherwise: the fixed regular quantity once stock is below the minimum.
+ *  - Ima/nema: the regular quantity when marked "nema".
+ * A written "what is missing" note puts the article on the list regardless
+ * (see needsOrder); the quantity can then be 0 and is adjusted by hand.
+ */
+export function orderQuantity(article: Article, input: CountInput | null, date: Date): number {
+  // "Pitaj šta fali" articles have no ordering rules: only the written note counts.
+  if (article.ask_note) return 0
   if (article.kind === 'yes_no') {
-    return input?.kind === 'yes_no' && input.has ? 0 : 1
+    return input?.kind === 'yes_no' && input.has ? 0 : article.order_qty
   }
-  const min = effectiveMinimum(article, date)
-  if (!min) return 0
   const counted = input ? quantityOf(article, input) : 0
-  if (counted >= min) return 0
-  const need = min - counted
-  // Pieces/bags/kegs are ordered whole; weights and liters keep one decimal.
-  const whole = article.kind === 'count' || article.kind === 'espresso' || article.unit === 'g'
-  return whole ? Math.ceil(round(need)) : Math.ceil(round(need) * 10) / 10
+  if (usesWeekendTarget(article, date)) {
+    const missing = round(article.weekend_target! - counted)
+    if (missing <= 0) return 0
+    return Math.ceil(round(missing / (article.pack_size > 0 ? article.pack_size : 1)))
+  }
+  if (!article.minimum || counted >= article.minimum) return 0
+  return article.order_qty
+}
+
+/** Goes on the order list: below the rule, or the worker wrote what is missing. */
+export function needsOrder(article: Article, input: CountInput | null, date: Date): boolean {
+  return orderQuantity(article, input, date) > 0 || noteOf(input) !== ''
+}
+
+/** Suggested amount on the order list (0 for note-only lines, which show just the note). */
+export function suggestedQuantity(article: Article, input: CountInput | null, date: Date): number {
+  return orderQuantity(article, input, date)
 }
 
 /**
@@ -91,6 +130,16 @@ export function orderNeed(article: Article, input: CountInput | null, date: Date
  * so bottle totals don't change when the empty-bottle weight is edited later.
  */
 export function describeInput(
+  article: Pick<Article, 'bottle_sizes' | 'kind' | 'unit'>,
+  input: CountInput,
+  total?: number,
+): string {
+  const note = noteOf(input)
+  const base = describeMeasured(article, input, total)
+  return note ? `${base} · fali: ${note}` : base
+}
+
+function describeMeasured(
   article: Pick<Article, 'bottle_sizes' | 'kind' | 'unit'>,
   input: CountInput,
   total?: number,

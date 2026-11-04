@@ -12,11 +12,15 @@ export type OrderStatus = 'pending' | 'ordered'
  *  - bottle:   full bottles per size + weight of the opened bottle per size
  *  - yes_no:   just "ima" / "nema"; "nema" goes on the order list
  *  - espresso: machine counter (just recorded) + full bags
+ * Any kind can also ask the worker what is missing (Article.ask_note).
  */
 export type MeasureKind = 'count' | 'weight' | 'bottle' | 'yes_no' | 'espresso'
 
 export const UNITS = ['kom', 'kg', 'g', 'l', 'kesica', 'kesa', 'kutija', 'bure'] as const
 export type Unit = (typeof UNITS)[number]
+
+export const ORDER_UNITS = ['kom', 'paket', 'gajba', 'kutija', 'kesa', 'flaša', 'bure', 'kg', 'l'] as const
+export type OrderUnit = (typeof ORDER_UNITS)[number]
 
 export interface Category {
   id: string
@@ -44,8 +48,21 @@ export interface Article {
   bottle_sizes: BottleSize[]
   /** Order when below this (in the article's unit; liters for bottles). */
   minimum: number
-  /** Optional higher minimum for counts done Fri–Sun. */
-  minimum_weekend: number | null
+  /** Regular day: how many order units to order when below the minimum. */
+  order_qty: number
+  /** Unit the supplier sells in: kom, paket, gajba... */
+  order_unit: OrderUnit
+  /** How much one order unit holds, in the counting unit (paket = 24 kom, flaša = 0.7 l). */
+  pack_size: number
+  /**
+   * Thursday count (no deliveries Sat/Sun): how much to have for the weekend,
+   * in the counting unit. Enough packs are ordered to reach it. null = regular rule.
+   */
+  weekend_target: number | null
+  /** Show a "Treba da se poruči" text field next to the count (e.g. tea flavours). */
+  ask_note: boolean
+  /** null = every count; 0..6 = only counted on that weekday (0 = Sunday, like getDay()). */
+  count_weekday: number | null
   active: boolean
   sort_order: number
   // --- Lager lista (book stock) — kept for the later accounting import ---
@@ -77,7 +94,10 @@ export interface Count {
   book_stock_as_of_date: string | null
 }
 
-export type CountInput =
+/** What the worker entered; `note` is the optional "what is missing" text. */
+export type CountInput = MeasuredInput & { note?: string }
+
+type MeasuredInput =
   | { kind: 'count'; value: number }
   | { kind: 'weight'; value: number }
   | { kind: 'yes_no'; has: boolean }
@@ -127,6 +147,9 @@ export interface OrderLine {
   counted: number | null
   minimum: number
   suggested_order_qty: number
+  order_unit: OrderUnit
   for_date: string
   order_status: OrderStatus
+  /** What the worker wrote is missing (articles with ask_note). */
+  note: string | null
 }

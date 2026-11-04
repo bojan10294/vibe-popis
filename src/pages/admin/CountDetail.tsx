@@ -8,7 +8,7 @@ import {
   listOrdersForCount,
 } from '../../data/repository'
 import type { Article, Category, Count, CountLine } from '../../data/types'
-import { describeInput, formatNum } from '../../lib/measure'
+import { describeInput, formatNum, noteOf } from '../../lib/measure'
 import { summarizeLines } from '../../lib/summary'
 import { Badge, Card, Spinner, formatMoney } from '../../components/ui'
 import { fmtDateTime } from '../../lib/format'
@@ -70,15 +70,17 @@ export function CountDetail() {
   const describe = (l: CountLine) => {
     const a = articleMap.get(l.article_id)
     if (a && a.kind === l.input.kind) return describeInput(a, l.input, l.counted)
-    if (l.input.kind === 'yes_no') return l.input.has ? 'Ima' : 'Nema'
-    return `${formatNum(l.counted)} ${l.unit}`
+    // Article deleted or its kind changed since: fall back to the saved snapshot.
+    const note = noteOf(l.input)
+    const base = l.input.kind === 'yes_no' ? (l.input.has ? 'Ima' : 'Nema') : `${formatNum(l.counted)} ${l.unit}`
+    return note ? `${base} · fali: ${note}` : base
   }
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-slate-800">Popis {fmtDateTime(count.datetime)}</h1>
+          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Popis {fmtDateTime(count.datetime)}</h1>
           <p className="text-sm text-slate-500">
             Radio: <strong className="text-slate-700">{count.user_name}</strong>
             {count.finished_at && <> · završeno {fmtDateTime(count.finished_at)}</>}
@@ -109,13 +111,13 @@ export function CountDetail() {
       {groups.map((g) => (
         <section key={g.name} className="space-y-1.5">
           <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">{g.name}</h2>
-          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-surface">
             <table className="w-full text-sm">
               <tbody>
                 {g.lines.map((l) => {
                   const diff = l.difference
                   const tone = diff == null ? '' : diff > 0 ? 'text-red-600' : diff < 0 ? 'text-green-600' : ''
-                  const nema = l.input.kind === 'yes_no' && !l.input.has
+                  const nema = (l.input.kind === 'yes_no' && !l.input.has) || noteOf(l.input) !== ''
                   return (
                     <tr key={l.id} className="border-t border-slate-100 first:border-t-0">
                       <td className="px-3 py-2 font-medium text-slate-800">{l.article_name}</td>

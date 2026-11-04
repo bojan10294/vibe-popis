@@ -1,11 +1,14 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
-import { Button, Card, Field, Input } from '../components/ui'
+import { useTheme } from '../lib/theme'
+import { AppLogo } from '../components/Layout'
+import { Button, Card, Field, Input, ThemeSwitch } from '../components/ui'
 
 export function Login() {
   const { login } = useAuth()
   const navigate = useNavigate()
+  const [theme, toggleTheme] = useTheme()
   const [name, setName] = useState('')
   const [pin, setPin] = useState('')
   const [error, setError] = useState('')
@@ -25,12 +28,16 @@ export function Login() {
   }
 
   return (
-    <div className="mx-auto flex min-h-full max-w-sm flex-col items-center justify-center px-4 py-10">
-      <div className="mb-6 text-center">
-        <h1 className="text-2xl font-bold text-brand-700">Popis</h1>
-        <p className="mt-1 text-sm text-slate-500">Inventarna kontrola — prijava</p>
+    <div className="relative mx-auto flex min-h-full max-w-sm flex-col items-center justify-center px-4 py-10">
+      <div className="absolute right-4 top-4">
+        <ThemeSwitch theme={theme} onToggle={toggleTheme} />
       </div>
-      <Card className="w-full">
+      <div className="mb-8 flex flex-col items-center text-center">
+        <AppLogo size={64} />
+        <h1 className="mt-4 text-3xl font-extrabold tracking-tight text-slate-900">Popis</h1>
+        <p className="mt-1 text-sm text-slate-500">Popis robe i lista nabavke</p>
+      </div>
+      <Card className="w-full p-5">
         <form onSubmit={onSubmit} className="space-y-4">
           <Field label="Ime">
             <Input
@@ -40,18 +47,18 @@ export function Login() {
               autoComplete="username"
             />
           </Field>
-          <Field label="PIN / lozinka">
+          <Field label="PIN">
             <Input
               type="password"
               value={pin}
               onChange={(e) => setPin(e.target.value)}
-              placeholder="PIN"
+              placeholder="••••"
               autoComplete="current-password"
               inputMode="numeric"
             />
           </Field>
-          {error && <p className="text-sm text-red-600">{error}</p>}
-          <Button type="submit" className="w-full" disabled={busy}>
+          {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+          <Button type="submit" className="w-full py-3" disabled={busy}>
             {busy ? 'Provera...' : 'Prijavi se'}
           </Button>
         </form>

@@ -9,9 +9,9 @@ import {
   upsertArticle,
   upsertCategory,
 } from '../../data/repository'
-import { UNITS, type Article, type Category, type MeasureKind, type Unit } from '../../data/types'
+import { ORDER_UNITS, UNITS, type Article, type Category, type MeasureKind, type OrderUnit, type Unit } from '../../data/types'
 import { uuid } from '../../lib/crypto'
-import { KIND_LABELS, formatNum, formatSize, unitLabel } from '../../lib/measure'
+import { KIND_LABELS, WEEKDAYS_ON, formatNum, formatSize, unitLabel } from '../../lib/measure'
 import { Button, Input, Select, Spinner } from '../../components/ui'
 
 const NO_CAT = '__none'
@@ -59,7 +59,12 @@ export function Articles() {
       allow_decimal: false,
       bottle_sizes: [],
       minimum: 0,
-      minimum_weekend: null,
+      order_qty: 1,
+      order_unit: 'kom',
+      pack_size: 1,
+      weekend_target: null,
+      ask_note: false,
+      count_weekday: null,
       active: true,
       sort_order: maxSort + 1,
       last_unit_price: 0,
@@ -132,7 +137,7 @@ export function Articles() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-xl font-bold text-slate-800">Artikli ({articles.length})</h1>
+        <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Artikli ({articles.length})</h1>
         <div className="flex gap-2">
           <Button variant="secondary" onClick={() => setCatForm({ id: null, name: '' })} className="text-sm">+ Kategorija</Button>
           <Button onClick={() => newArticle(categories[0]?.id ?? null)} className="text-sm">+ Artikal</Button>
@@ -175,7 +180,7 @@ export function Articles() {
             )}
           </div>
 
-          <div className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <div className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-surface">
             {s.articles.map((a, i) => (
               <div key={a.id} className={`flex items-center gap-1.5 py-1.5 pl-1 pr-2 ${a.active ? '' : 'bg-slate-50'}`}>
                 {!query && (
@@ -195,7 +200,7 @@ export function Articles() {
                   title={a.active ? 'Isključi iz popisa' : 'Uključi u popis'}
                   className={`h-6 w-11 shrink-0 rounded-full p-0.5 transition-colors ${a.active ? 'bg-green-500' : 'bg-slate-300'}`}
                 >
-                  <span className={`block h-5 w-5 rounded-full bg-white transition-transform ${a.active ? 'translate-x-5' : ''}`} />
+                  <span className={`block h-5 w-5 rounded-full bg-white shadow transition-transform ${a.active ? 'translate-x-5' : ''}`} />
                 </button>
                 <IconBtn label="Uredi" onClick={() => setEditing(a)}>✎</IconBtn>
                 <IconBtn label="Obriši" onClick={() => remove(a)} danger>🗑</IconBtn>
@@ -234,6 +239,7 @@ export function Articles() {
 
 function summary(a: Article): string {
   const parts = [KIND_LABELS[a.kind]]
+  if (a.count_weekday != null) parts.unshift(`📅 samo ${WEEKDAYS_ON[a.count_weekday]}`)
   if (a.kind === 'bottle') {
     parts.push(
       a.bottle_sizes
@@ -243,11 +249,19 @@ function summary(a: Article): string {
   } else if (a.kind === 'count' || a.kind === 'weight') {
     parts.push(a.unit)
   }
-  if (a.kind !== 'yes_no') {
-    let min = `min ${formatNum(a.minimum)} ${unitLabel(a)}`
-    if (a.minimum_weekend != null) min += ` · vikend ${formatNum(a.minimum_weekend)}`
-    parts.push(min)
+  const u = unitLabel(a)
+  if (a.ask_note) {
+    parts.push('broj + šta fali')
+    return parts.join(' · ')
   }
+  if (a.kind === 'yes_no') {
+    parts.push(`nema → ${formatNum(a.order_qty)} ${a.order_unit}`)
+    return parts.join(' · ')
+  }
+  parts.push(`ispod ${formatNum(a.minimum)} ${u} → ${formatNum(a.order_qty)} ${a.order_unit}`)
+  if (packMissing(a)) parts.push(`⚠ upiši koliko ${u} ima u 1 ${a.order_unit}`)
+  else if (a.pack_size !== 1 || a.order_unit !== u) parts.push(`1 ${a.order_unit} = ${formatNum(a.pack_size)} ${u}`)
+  if (a.weekend_target != null) parts.push(`vikend: ${formatNum(a.weekend_target)} ${u}`)
   return parts.join(' · ')
 }
 
@@ -305,6 +319,27 @@ function ArrowBtn({
   )
 }
 
+/** A crate/pack still at the default "1 = 1 kom" — the weekend math would be way off. */
+function packMissing(a: Pick<Article, 'kind' | 'pack_size' | 'order_unit'>): boolean {
+  return a.kind === 'count' && a.pack_size === 1 && ['gajba', 'paket', 'kutija'].includes(a.order_unit)
+}
+
+function OrderUnitSelect({ value, onChange }: { value: OrderUnit; onChange: (u: OrderUnit) => void }) {
+  return (
+    <Select value={value} onChange={(e) => onChange(e.target.value as OrderUnit)}>
+      {ORDER_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+    </Select>
+  )
+}
+
+/** A worked example under the weekend field, e.g. "ima 12 → fali 38 → 2 paket". */
+function weekendExample(target: number | null, pack: number, orderUnit: string, unit: string): string | null {
+  if (target == null || target <= 0) return null
+  const has = Math.round(target / 4)
+  const packs = Math.ceil((target - has) / pack)
+  return `Primer: ako ima ${formatNum(has)} ${unit}, fali ${formatNum(target - has)} → poruči ${packs} ${orderUnit} (biće ${formatNum(has + packs * pack)} ${unit}).`
+}
+
 const COUNT_UNITS: Unit[] = UNITS.filter((u) => u !== 'kg' && u !== 'g')
 
 function ArticleEditor({
@@ -325,7 +360,11 @@ function ArticleEditor({
   const [draft, setDraft] = useState<Article>(article)
   // Number fields are edited as strings so "0," or "" don't jump around.
   const [minimum, setMinimum] = useState(String(article.minimum))
-  const [weekend, setWeekend] = useState(article.minimum_weekend == null ? '' : String(article.minimum_weekend))
+  const [orderQty, setOrderQty] = useState(String(article.order_qty))
+  const [packSize, setPackSize] = useState(String(article.pack_size))
+  const [weekendTarget, setWeekendTarget] = useState(
+    article.weekend_target == null ? '' : String(article.weekend_target),
+  )
   const [sizes, setSizes] = useState(
     article.bottle_sizes.map((s) => ({
       size: String(s.size_l),
@@ -333,6 +372,7 @@ function ArticleEditor({
     })),
   )
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
 
   const set = <K extends keyof Article>(k: K, v: Article[K]) => setDraft((d) => ({ ...d, [k]: v }))
   const num = (s: string) => {
@@ -350,13 +390,28 @@ function ArticleEditor({
   }
 
   const save = async () => {
-    if (!draft.name.trim()) return
+    if (saving || !draft.name.trim()) return
     setSaving(true)
-    await upsertArticle({
+    setError('')
+    try {
+      await persist()
+    } catch (e) {
+      setError(`Čuvanje nije uspelo: ${e instanceof Error ? e.message : String(e)}`)
+      setSaving(false)
+      return
+    }
+    setSaving(false)
+    onSaved()
+  }
+
+  const persist = () =>
+    upsertArticle({
       ...draft,
       name: draft.name.trim(),
       minimum: num(minimum) ?? 0,
-      minimum_weekend: num(weekend),
+      order_qty: num(orderQty) ?? 1,
+      pack_size: num(packSize) || 1,
+      weekend_target: num(weekendTarget),
       bottle_sizes:
         draft.kind === 'bottle'
           ? sizes
@@ -365,17 +420,22 @@ function ArticleEditor({
               .sort((a, b) => a.size_l - b.size_l)
           : [],
     })
-    setSaving(false)
-    onSaved()
-  }
 
   const minUnit = unitLabel(draft)
 
   return (
     <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/40 sm:items-center" onClick={onClose}>
       <div
-        className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl sm:rounded-2xl"
+        className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-surface p-5 shadow-xl sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          // Enter in any text field saves; Esc closes without saving.
+          if (e.key === 'Escape') onClose()
+          if (e.key === 'Enter' && e.target instanceof HTMLInputElement && e.target.type !== 'checkbox') {
+            e.preventDefault()
+            save()
+          }
+        }}
       >
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-bold text-slate-800">{isNew ? 'Novi artikal' : 'Uredi artikal'}</h2>
@@ -462,7 +522,7 @@ function ArticleEditor({
                     key={v}
                     type="button"
                     onClick={() => setSizes((p) => [...p, { size: v, empty: '' }])}
-                    className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-sm text-brand-700"
+                    className="rounded-lg border border-slate-200 bg-surface px-2.5 py-1 text-sm text-brand-700"
                   >
                     + {v.replace('.', ',')} l
                   </button>
@@ -471,25 +531,109 @@ function ArticleEditor({
             </div>
           )}
 
-          {draft.kind === 'yes_no' ? (
-            <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-500">
-              Kad radnik označi „Nema”, artikal ide na listu nabavke.
-            </p>
-          ) : (
-            <div className="grid grid-cols-2 gap-3">
-              <L label={`Poruči ispod (${minUnit})`}>
-                <Input inputMode="decimal" value={minimum} onChange={(e) => setMinimum(e.target.value)} />
-              </L>
-              <L label="Vikendom (pet–ned)">
-                <Input
-                  inputMode="decimal"
-                  value={weekend}
-                  placeholder="isto"
-                  onChange={(e) => setWeekend(e.target.value)}
-                />
-              </L>
-            </div>
+          <label className="flex items-start gap-2 rounded-xl border border-slate-200 p-3 text-sm text-slate-600">
+            <input
+              type="checkbox"
+              checked={draft.ask_note}
+              onChange={(e) => set('ask_note', e.target.checked)}
+              className="mt-0.5 h-4 w-4"
+            />
+            <span>
+              <span className="font-medium text-slate-700">Samo broj + šta fali</span>
+              <span className="block text-xs text-slate-400">
+                Radnik upiše ukupan broj i u polje „Treba da se poruči” šta fali (npr. ukusi čaja). Nema minimuma
+                ni pakovanja — na listu nabavke ide samo ono što upiše.
+              </span>
+            </span>
+          </label>
+
+          {!draft.ask_note && (
+          <div className="space-y-4 rounded-xl bg-slate-50 p-3">
+            <p className="text-sm font-semibold text-slate-700">Poručivanje</p>
+
+            {draft.kind === 'yes_no' ? (
+              <div className="grid grid-cols-2 gap-2">
+                <L label="Kad je „Nema”, poruči">
+                  <Input inputMode="decimal" value={orderQty} onChange={(e) => setOrderQty(e.target.value)} />
+                </L>
+                <L label="Jedinica">
+                  <OrderUnitSelect value={draft.order_unit} onChange={(u) => set('order_unit', u)} />
+                </L>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <p className="mb-1 text-xs font-medium text-slate-500">
+                    Pakovanje — koliko {minUnit} ima u 1 {draft.order_unit} (različito za svaki artikal)
+                  </p>
+                  <div className="flex items-center gap-2 text-sm text-slate-600">
+                    <span>1</span>
+                    <div className="w-28">
+                      <OrderUnitSelect value={draft.order_unit} onChange={(u) => set('order_unit', u)} />
+                    </div>
+                    <span>=</span>
+                    <div className="w-24">
+                      <Input inputMode="decimal" value={packSize} onChange={(e) => setPackSize(e.target.value)} />
+                    </div>
+                    <span>{minUnit}</span>
+                  </div>
+                  {packMissing({ kind: draft.kind, pack_size: num(packSize) || 1, order_unit: draft.order_unit }) && (
+                    <p className="mt-1.5 text-xs font-medium text-amber-700">
+                      ⚠ Upiši koliko {minUnit} ima u 1 {draft.order_unit} — inače vikend obračun neće biti tačan.
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <p className="mb-1 text-xs font-medium text-slate-500">Običan dan</p>
+                  <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
+                    <span>Ispod</span>
+                    <div className="w-20">
+                      <Input inputMode="decimal" value={minimum} onChange={(e) => setMinimum(e.target.value)} />
+                    </div>
+                    <span>{minUnit} → poruči</span>
+                    <div className="w-16">
+                      <Input inputMode="decimal" value={orderQty} onChange={(e) => setOrderQty(e.target.value)} />
+                    </div>
+                    <span>{draft.order_unit}</span>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-1 text-xs font-medium text-slate-500">Četvrtak — za vikend treba da ima</p>
+                  <div className="flex items-center gap-2 text-sm text-slate-600">
+                    <div className="w-24">
+                      <Input
+                        inputMode="decimal"
+                        value={weekendTarget}
+                        placeholder="—"
+                        onChange={(e) => setWeekendTarget(e.target.value)}
+                      />
+                    </div>
+                    <span>{minUnit}</span>
+                  </div>
+                  <p className="mt-1.5 text-xs text-slate-400">
+                    {weekendExample(num(weekendTarget), num(packSize) || 1, draft.order_unit, minUnit) ??
+                      'Subotom i nedeljom nema dostave. Prazno = četvrtak se računa kao običan dan.'}
+                  </p>
+                </div>
+              </>
+            )}
+          </div>
           )}
+
+          <L label="Kad se broji">
+            <Select
+              value={draft.count_weekday == null ? '' : String(draft.count_weekday)}
+              onChange={(e) => set('count_weekday', e.target.value === '' ? null : Number(e.target.value))}
+            >
+              <option value="">Svaki popis</option>
+              {/* Monday first, Sunday last */}
+              {[1, 2, 3, 4, 5, 6, 0].map((d) => (
+                <option key={d} value={d}>Jednom nedeljno — samo {WEEKDAYS_ON[d]}</option>
+              ))}
+            </Select>
+          </L>
 
           <label className="flex items-center gap-2 text-sm text-slate-600">
             <input
@@ -501,6 +645,8 @@ function ArticleEditor({
             Aktivan (prikazuje se u popisu)
           </label>
         </div>
+
+        {error && <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
         <div className="mt-5 flex justify-between gap-2">
           {isNew ? <span /> : (

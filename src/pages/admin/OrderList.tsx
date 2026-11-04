@@ -9,7 +9,7 @@ import {
   setOrderStatus,
 } from '../../data/repository'
 import type { Category, Count, OrderLine } from '../../data/types'
-import { formatNum } from '../../lib/measure'
+import { formatNum, isWeekendOrderDay } from '../../lib/measure'
 import { fmtDateTime } from '../../lib/format'
 import { Button, Card, EmptyState, Spinner } from '../../components/ui'
 
@@ -75,7 +75,7 @@ export function OrderList() {
   }
 
   const exportCsv = () => {
-    const header = 'Kategorija,Artikal,Stanje,Minimum,Poruciti,Jm,Status\n'
+    const header = 'Kategorija,Artikal,Stanje,Minimum,Poruciti,Jedinica,Status,Fali\n'
     const body = groups
       .flatMap((g) =>
         g.list.map((o) =>
@@ -83,10 +83,11 @@ export function OrderList() {
             csv(g.name),
             csv(o.article_name),
             o.kind === 'yes_no' ? 'nema' : formatNum(o.counted),
-            o.kind === 'yes_no' ? '' : formatNum(o.minimum),
-            o.kind === 'yes_no' ? '' : formatNum(o.suggested_order_qty),
-            o.unit,
+            o.kind === 'yes_no' || noteOnly(o) ? '' : formatNum(o.minimum),
+            noteOnly(o) ? '' : formatNum(o.suggested_order_qty),
+            noteOnly(o) ? '' : o.order_unit,
             o.order_status === 'ordered' ? 'poruceno' : 'za porucivanje',
+            csv(o.note ?? ''),
           ].join(','),
         ),
       )
@@ -100,16 +101,22 @@ export function OrderList() {
   }
 
   const pending = orders.filter((o) => o.order_status === 'pending').length
+  const weekend = isWeekendOrderDay(new Date(count.datetime))
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h1 className="text-xl font-bold text-slate-800">Lista nabavke</h1>
+          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Lista nabavke</h1>
           <p className="text-sm text-slate-500">
             Popis <Link to={`/admin/counts/${count.id}`} className="text-brand-700 hover:underline">{fmtDateTime(count.datetime)}</Link>{' '}
             · {count.user_name} · {orders.length} artikala · {pending} za poručiti
           </p>
+          {weekend && (
+            <p className="mt-1 inline-block rounded-lg bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+              Popis od četvrtka — poručuje se za vikend (do ciljnog stanja)
+            </p>
+          )}
         </div>
         {orders.length > 0 && (
           <div className="flex gap-2">
@@ -125,7 +132,7 @@ export function OrderList() {
         groups.map((g) => (
           <section key={g.name} className="space-y-1.5">
             <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">{g.name}</h2>
-            <div className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <div className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-surface">
               {g.list.map((o) => (
                 <div key={o.id} className={`flex items-center gap-3 px-3 py-2 ${o.order_status === 'ordered' ? 'bg-green-50/60' : ''}`}>
                   <div className="min-w-0 flex-1">
@@ -133,20 +140,23 @@ export function OrderList() {
                     <p className="text-xs text-slate-400">
                       {o.kind === 'yes_no'
                         ? 'označeno: nema'
-                        : `ima ${formatNum(o.counted)} ${o.unit} · min ${formatNum(o.minimum)}`}
+                        : noteOnly(o)
+                          ? `ima ${formatNum(o.counted)} ${o.unit}`
+                          : `ima ${formatNum(o.counted)} ${o.unit} · ${weekend ? 'treba' : 'min'} ${formatNum(o.minimum)}`}
                     </p>
+                    {o.note && <p className="mt-0.5 text-sm font-medium text-red-600">Fali: {o.note}</p>}
                   </div>
-                  {o.kind !== 'yes_no' && (
-                    <div className="flex items-center gap-1">
-                      <input
-                        inputMode="decimal"
-                        defaultValue={String(o.suggested_order_qty)}
-                        onBlur={(e) => updateQty(o, e.target.value)}
-                        className="w-16 rounded-lg border border-slate-300 px-2 py-1 text-right outline-none focus:border-brand-500"
-                      />
-                      <span className="w-10 text-xs text-slate-500">{o.unit}</span>
-                    </div>
-                  )}
+                  <div className={`flex items-center gap-1 ${noteOnly(o) ? 'hidden' : ''}`}>
+                    <input
+                      inputMode="decimal"
+                      defaultValue={String(o.suggested_order_qty)}
+                      onBlur={(e) => updateQty(o, e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+                      aria-label={`Količina za ${o.article_name}`}
+                      className="w-14 rounded-lg border border-slate-300 bg-surface px-2 py-1 text-right font-semibold text-slate-800 outline-none focus:border-brand-500"
+                    />
+                    <span className="w-11 text-xs text-slate-500">{o.order_unit}</span>
+                  </div>
                   <button
                     onClick={() => toggleStatus(o)}
                     className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${
@@ -165,8 +175,15 @@ export function OrderList() {
   )
 }
 
+/** "Samo broj + šta fali" lines: no quantity, the note says what to order. */
+function noteOnly(o: OrderLine): boolean {
+  return !!o.note && o.suggested_order_qty === 0
+}
+
 function qtyText(o: OrderLine): string {
-  return o.kind === 'yes_no' ? 'nema' : `${formatNum(o.suggested_order_qty)} ${o.unit}`
+  if (noteOnly(o)) return `fali: ${o.note}`
+  const qty = `${formatNum(o.suggested_order_qty)} ${o.order_unit}`
+  return o.note ? `${qty} (fali: ${o.note})` : qty
 }
 
 function csv(s: string): string {

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState, type MutableRefObject, type ReactNode } from 'react'
 import type { Article, CountInput } from '../data/types'
 import { formatNum, formatSize, quantityOf, sizeKey } from '../lib/measure'
 import { Button } from './ui'
@@ -43,7 +43,7 @@ function NumberField({
           inputMode={decimal ? 'decimal' : 'numeric'}
           autoFocus={autoFocus}
           placeholder="0"
-          className="w-full rounded-xl border-2 border-slate-300 bg-white px-4 py-3 text-right text-2xl font-semibold outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+          className="w-full rounded-xl border-2 border-slate-300 bg-surface px-4 py-3 text-right text-2xl font-semibold outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
         />
         {suffix && <span className="w-16 shrink-0 text-base text-slate-500">{suffix}</span>}
       </div>
@@ -66,16 +66,55 @@ export function MeasureInput({
   submitLabel: string
   onSubmit: (input: CountInput) => void
 }) {
+  const [note, setNote] = useState(initial?.note ?? '')
+  const noteRef = useRef<HTMLInputElement>(null)
+  const submitRef = useRef<(() => void) | null>(null)
+
+  // Attach the "what is missing" note (only for articles that ask for it).
+  const submit = (input: CountInput) =>
+    onSubmit({ ...input, note: article.ask_note && note.trim() ? note.trim() : undefined })
+
+  const slot: Slot = article.ask_note
+    ? {
+        extra: (
+          <label className="block">
+            <span className="mb-1 block text-sm font-medium text-slate-600">Treba da se poruči:</span>
+            <input
+              ref={noteRef}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && submitRef.current?.()}
+              placeholder="npr. zeleni, kamilica — prazno ako ništa ne fali"
+              className="w-full rounded-xl border-2 border-slate-300 bg-surface px-4 py-3 text-base text-slate-800 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+            />
+          </label>
+        ),
+        // Enter in the number moves on to the note instead of skipping it.
+        onEnter: () => noteRef.current?.focus(),
+        submitRef,
+      }
+    : {}
+
   switch (article.kind) {
     case 'yes_no':
-      return <YesNoInput initial={initial} onSubmit={onSubmit} />
+      return <YesNoInput initial={initial} onSubmit={submit} {...slot} />
     case 'bottle':
-      return <BottleInput article={article} initial={initial} submitLabel={submitLabel} onSubmit={onSubmit} />
+      return <BottleInput article={article} initial={initial} submitLabel={submitLabel} onSubmit={submit} {...slot} />
     case 'espresso':
-      return <EspressoInput initial={initial} submitLabel={submitLabel} onSubmit={onSubmit} />
+      return <EspressoInput initial={initial} submitLabel={submitLabel} onSubmit={submit} {...slot} />
     default:
-      return <SimpleInput article={article} initial={initial} submitLabel={submitLabel} onSubmit={onSubmit} />
+      return <SimpleInput article={article} initial={initial} submitLabel={submitLabel} onSubmit={submit} {...slot} />
   }
+}
+
+/** Optional extras the wrapper passes to every input. */
+interface Slot {
+  /** Rendered just above the submit button (the "what is missing" field). */
+  extra?: ReactNode
+  /** Enter in the number fields; defaults to submitting. */
+  onEnter?: () => void
+  /** Filled with the input's submit, so the note field can submit on Enter. */
+  submitRef?: MutableRefObject<(() => void) | null>
 }
 
 function SimpleInput({
@@ -83,12 +122,15 @@ function SimpleInput({
   initial,
   submitLabel,
   onSubmit,
+  extra,
+  onEnter,
+  submitRef,
 }: {
   article: Article
   initial: CountInput | null
   submitLabel: string
   onSubmit: (input: CountInput) => void
-}) {
+} & Slot) {
   const start = initial && (initial.kind === 'count' || initial.kind === 'weight') ? String(initial.value) : ''
   const [raw, setRaw] = useState(start)
   const decimal = article.kind === 'weight' || article.allow_decimal || article.unit === 'l'
@@ -99,6 +141,7 @@ function SimpleInput({
     if (value == null) return
     onSubmit(article.kind === 'weight' ? { kind: 'weight', value } : { kind: 'count', value })
   }
+  if (submitRef) submitRef.current = submit
 
   return (
     <div className="space-y-4">
@@ -107,7 +150,7 @@ function SimpleInput({
           <button
             type="button"
             onClick={() => setRaw(String(Math.max(0, (value ?? 0) - step)))}
-            className="h-[60px] w-14 shrink-0 rounded-xl border-2 border-slate-200 bg-white text-2xl text-slate-600"
+            className="h-[60px] w-14 shrink-0 rounded-xl border-2 border-slate-200 bg-surface text-2xl text-slate-600"
           >
             −
           </button>
@@ -120,19 +163,20 @@ function SimpleInput({
             decimal={decimal}
             suffix={article.unit}
             autoFocus
-            onEnter={submit}
+            onEnter={onEnter ?? submit}
           />
         </div>
         {article.kind === 'count' && (
           <button
             type="button"
             onClick={() => setRaw(String((value ?? 0) + step))}
-            className="h-[60px] w-14 shrink-0 rounded-xl border-2 border-slate-200 bg-white text-2xl text-slate-600"
+            className="h-[60px] w-14 shrink-0 rounded-xl border-2 border-slate-200 bg-surface text-2xl text-slate-600"
           >
             +
           </button>
         )}
       </div>
+      {extra}
       <Button onClick={submit} disabled={value == null} className="w-full py-4 text-lg">
         {submitLabel}
       </Button>
@@ -143,13 +187,16 @@ function SimpleInput({
 function YesNoInput({
   initial,
   onSubmit,
+  extra,
 }: {
   initial: CountInput | null
   onSubmit: (input: CountInput) => void
-}) {
+} & Slot) {
   const current = initial?.kind === 'yes_no' ? initial.has : null
   const base = 'flex-1 rounded-2xl py-8 text-2xl font-bold transition-colors'
   return (
+    <div className="space-y-4">
+    {extra}
     <div className="flex gap-3">
       <button
         type="button"
@@ -166,6 +213,7 @@ function YesNoInput({
         Nema
       </button>
     </div>
+    </div>
   )
 }
 
@@ -174,12 +222,15 @@ function BottleInput({
   initial,
   submitLabel,
   onSubmit,
+  extra,
+  onEnter,
+  submitRef,
 }: {
   article: Article
   initial: CountInput | null
   submitLabel: string
   onSubmit: (input: CountInput) => void
-}) {
+} & Slot) {
   const init = initial?.kind === 'bottle' ? initial : null
   const toStr = (rec: Record<string, number> | undefined) =>
     Object.fromEntries(article.bottle_sizes.map((s) => {
@@ -206,6 +257,7 @@ function BottleInput({
     (s) => s.empty_weight_g == null && (parse(opened[sizeKey(s.size_l)] ?? '') ?? 0) > 0,
   )
   const submit = () => anyFilled && onSubmit(input)
+  if (submitRef) submitRef.current = submit
 
   return (
     <div className="space-y-4">
@@ -219,13 +271,14 @@ function BottleInput({
               onChange={(v) => setFull((p) => ({ ...p, [k]: v }))}
               decimal={false}
               autoFocus={i === 0}
+              onEnter={onEnter ?? submit}
             />
             <NumberField
               label={`Načeta ${formatSize(s.size_l)} (g)`}
               value={opened[k] ?? ''}
               onChange={(v) => setOpened((p) => ({ ...p, [k]: v }))}
               decimal={false}
-              onEnter={i === article.bottle_sizes.length - 1 ? submit : undefined}
+              onEnter={onEnter ?? submit}
             />
           </div>
         )
@@ -239,6 +292,7 @@ function BottleInput({
         </p>
       )}
       <p className="text-center text-xs text-slate-400">Prazno polje se računa kao 0.</p>
+      {extra}
       <Button onClick={submit} disabled={!anyFilled} className="w-full py-4 text-lg">
         {submitLabel}
       </Button>
@@ -250,11 +304,14 @@ function EspressoInput({
   initial,
   submitLabel,
   onSubmit,
+  extra,
+  onEnter,
+  submitRef,
 }: {
   initial: CountInput | null
   submitLabel: string
   onSubmit: (input: CountInput) => void
-}) {
+} & Slot) {
   const init = initial?.kind === 'espresso' ? initial : null
   const [counter, setCounter] = useState(init ? String(init.machine_counter) : '')
   const [bags, setBags] = useState(init ? String(init.bags) : '')
@@ -264,10 +321,12 @@ function EspressoInput({
     if (c == null || b == null) return
     onSubmit({ kind: 'espresso', machine_counter: c, bags: b })
   }
+  if (submitRef) submitRef.current = submit
   return (
     <div className="space-y-4">
-      <NumberField label="Broj na aparatu" value={counter} onChange={setCounter} decimal={false} autoFocus />
-      <NumberField label="Pune kese (kg)" value={bags} onChange={setBags} decimal suffix="kesa" onEnter={submit} />
+      <NumberField label="Broj na aparatu" value={counter} onChange={setCounter} decimal={false} autoFocus onEnter={onEnter ?? submit} />
+      <NumberField label="Pune kese (kg)" value={bags} onChange={setBags} decimal suffix="kesa" onEnter={onEnter ?? submit} />
+      {extra}
       <Button onClick={submit} disabled={c == null || b == null} className="w-full py-4 text-lg">
         {submitLabel}
       </Button>

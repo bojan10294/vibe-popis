@@ -1,6 +1,6 @@
 import { run, sb } from './supabase'
 import { uuid } from '../lib/crypto'
-import type { Article, BottleSize, Category, MeasureKind, Unit } from './types'
+import type { Article, BottleSize, Category, MeasureKind, OrderUnit, Unit } from './types'
 
 // Starting article list, taken from the paper count sheet. Inserted once into
 // an empty database; after that it is maintained in the admin panel.
@@ -12,7 +12,8 @@ type Seed = {
   minimum: number
   allow_decimal?: boolean
   bottle_sizes?: BottleSize[]
-  minimum_weekend?: number
+  weekend_target?: number
+  ask_note?: boolean
 }
 
 // Small builders so the list below reads like the paper sheet.
@@ -69,7 +70,7 @@ const LIST: { id: string; name: string; items: Seed[] }[] = [
     id: 'cat-pivo-vino',
     name: 'Pivo, cider i vino',
     items: [
-      { ...kom('Točeno pivo – Birra Moretti (puna burad)', 1, 'bure'), minimum_weekend: 3 },
+      { ...kom('Točeno pivo – Birra Moretti (puna burad)', 1, 'bure'), weekend_target: 3 },
       kom('Heineken', 100),
       kom('Zajecarsko', 40),
       kom('Corona', 20),
@@ -142,7 +143,7 @@ const LIST: { id: string; name: string; items: Seed[] }[] = [
     items: [
       { name: 'Espreso', kind: 'espresso', unit: 'kesa', minimum: 3 },
       kom('Domaca kafa (kesice 8g)', 0, 'kesica'),
-      kom('Caj', 0, 'kesica'),
+      { ...kom('Caj'), ask_note: true },
       kom('Topla cokolada crna', 10, 'kesica'),
       kom('Topla cokolada bela', 10, 'kesica'),
       kom('Ness', 0, 'kesica'),
@@ -204,7 +205,7 @@ const LIST: { id: string; name: string; items: Seed[] }[] = [
     id: 'cat-ovsene',
     name: 'Ovsene',
     items: [
-      yn('Ovsene pahuljice'),
+      kg('Ovsene pahuljice'),
       kom('Grcki jogurt'),
       kg('Med'),
       kg('Cia semenke'),
@@ -321,7 +322,12 @@ export async function seedIfEmpty(): Promise<boolean> {
       allow_decimal: s.allow_decimal ?? false,
       bottle_sizes: s.bottle_sizes ?? [],
       minimum: s.minimum,
-      minimum_weekend: s.minimum_weekend ?? null,
+      order_qty: 1,
+      pack_size: s.kind === 'bottle' ? (s.bottle_sizes?.[0]?.size_l ?? 1) : 1,
+      weekend_target: s.weekend_target ?? null,
+      ask_note: s.ask_note ?? false,
+      count_weekday: null,
+      order_unit: defaultOrderUnit(s, cat.id),
       active: true,
       sort_order: ++order,
       last_unit_price: 0,
@@ -331,4 +337,15 @@ export async function seedIfEmpty(): Promise<boolean> {
   await run(sb().from('categories').insert(categories))
   await run(sb().from('articles').insert(articles))
   return true
+}
+
+/** Starting order unit; same rules as supabase/migrations/002_order_qty.sql. */
+function defaultOrderUnit(s: Seed, categoryId: string): OrderUnit {
+  if (s.kind === 'bottle') return 'flaša'
+  if (s.unit === 'bure') return 'bure'
+  if (s.kind === 'espresso') return 'kesa'
+  if (s.kind === 'weight' && s.unit === 'kg') return 'kg'
+  if (s.kind === 'count' && s.unit === 'kom' && (categoryId === 'cat-flasice' || categoryId === 'cat-pivo-vino')) return 'gajba'
+  if (s.kind === 'count' && (s.unit === 'kesica' || s.unit === 'l')) return 'paket'
+  return 'kom'
 }

@@ -32,7 +32,7 @@ export function Dashboard() {
 
   return (
     <div className="space-y-5">
-      <h1 className="text-xl font-bold text-slate-800">Dashboard</h1>
+      <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Pregled</h1>
 
       {last && (
         <Link to="/admin/orders" className="block">

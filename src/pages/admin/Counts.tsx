@@ -28,7 +28,7 @@ export function Counts() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-bold text-slate-800">Istorija popisa</h1>
+      <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Istorija popisa</h1>
       {counts.length === 0 ? (
         <EmptyState title="Nema popisa" hint="Popisi se pojavljuju kad radnici počnu brojanje." />
       ) : (
@@ -44,7 +44,7 @@ export function Counts() {
 
 export function CountRow({ count: c, onDelete }: { count: Count; onDelete?: () => void }) {
   return (
-    <div className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white p-3">
+    <div className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-surface p-3">
       <Link to={`/admin/counts/${c.id}`} className="min-w-0 flex-1 hover:underline">
         <p className="font-medium text-slate-800">{fmtDateTime(c.datetime)}</p>
         <p className="text-sm text-slate-500">{c.user_name}</p>

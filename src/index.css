@@ -1,7 +1,10 @@
 @import 'tailwindcss';
 
+/* Dark mode is a class on <html>, set by the theme switch (see lib/theme.ts). */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
-  --font-sans: system-ui, 'Segoe UI', Roboto, sans-serif;
+  --font-sans: 'Inter', system-ui, 'Segoe UI', Roboto, sans-serif;
   --color-brand-50: #f5f3ff;
   --color-brand-100: #ede9fe;
   --color-brand-200: #ddd6fe;
@@ -12,6 +15,65 @@
   --color-brand-700: #6d28d9;
   --color-brand-800: #5b21b6;
   --color-brand-900: #4c1d95;
+
+  /* Page background and card/panel surface — the two tokens that flip. */
+  --color-canvas: #f4f5f9;
+  --color-surface: #ffffff;
+}
+
+/*
+ * Dark theme: instead of adding dark: classes everywhere, the palette itself
+ * is remapped. Neutrals (slate) invert; color tints (50–300) become deep
+ * tints and dark text shades (700–900) become light. 400–600 stay as they
+ * are, so solid buttons (bg-*-600 + white text) keep their contrast.
+ */
+.dark {
+  color-scheme: dark;
+  --color-canvas: #0c0f17;
+  --color-surface: #151a26;
+
+  --color-slate-50: #1b2130;
+  --color-slate-100: #222939;
+  --color-slate-200: #2b3345;
+  --color-slate-300: #3a4357;
+  --color-slate-400: #7c869b;
+  --color-slate-500: #98a1b4;
+  --color-slate-600: #b6becd;
+  --color-slate-700: #d2d8e2;
+  --color-slate-800: #e7ebf1;
+  --color-slate-900: #f3f5f9;
+
+  --color-brand-50: #1d1734;
+  --color-brand-100: #281f4a;
+  --color-brand-200: #3b2d6b;
+  --color-brand-300: #5a46a0;
+  --color-brand-700: #c4b5fd;
+  --color-brand-800: #ddd6fe;
+  --color-brand-900: #ede9fe;
+
+  --color-green-50: #0f251a;
+  --color-green-100: #133220;
+  --color-green-200: #1c4a30;
+  --color-green-300: #2a6744;
+  --color-green-700: #7ee2a8;
+  --color-green-800: #a7f0c4;
+  --color-green-900: #d1fae0;
+
+  --color-red-50: #2b1416;
+  --color-red-100: #3a1a1d;
+  --color-red-200: #5a2428;
+  --color-red-300: #7f2f35;
+  --color-red-700: #fca5a5;
+  --color-red-800: #fecaca;
+  --color-red-900: #fee2e2;
+
+  --color-amber-50: #29200e;
+  --color-amber-100: #382a10;
+  --color-amber-200: #594214;
+  --color-amber-300: #7a5a17;
+  --color-amber-700: #fcd34d;
+  --color-amber-800: #fde68a;
+  --color-amber-900: #fef3c7;
 }
 
 html,
@@ -24,11 +86,11 @@ body {
   margin: 0;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #f4f3ec;
-  color: #1f2028;
+  background-color: var(--color-canvas);
+  color: var(--color-slate-800);
+  transition: background-color 0.2s ease;
 }
 
-/* Larger touch targets on mobile counting screens */
 button {
   -webkit-tap-highlight-color: transparent;
 }
