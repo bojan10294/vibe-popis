@@ -36,6 +36,8 @@ export function CountSession() {
   const [view, setView] = useState<View>({ mode: 'categories' })
   const [loading, setLoading] = useState(true)
   const [finishing, setFinishing] = useState(false)
+  /** Article list inside a category, for jumping back to any article. */
+  const [showList, setShowList] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -89,8 +91,15 @@ export function CountSession() {
     return i === -1 ? 0 : i
   }
 
-  const openGroup = (g: Group) =>
+  const openGroup = (g: Group) => {
+    setShowList(false)
     setView({ mode: 'article', groupId: g.id, index: firstOpenIndex(g), fromReview: false })
+  }
+
+  const jumpTo = (g: Group, index: number) => {
+    setShowList(false)
+    setView({ mode: 'article', groupId: g.id, index, fromReview: false })
+  }
 
   const onSubmit = async (group: Group, index: number, input: CountInput, fromReview: boolean) => {
     // Ignore double taps while the previous entry is still saving.
@@ -143,10 +152,52 @@ export function CountSession() {
           >
             ← {view.fromReview ? 'Pregled' : 'Kategorije'}
           </button>
-          <span className="text-sm text-slate-500">
-            {view.index + 1} / {group.articles.length}
-          </span>
+          {view.fromReview ? (
+            <span className="text-sm text-slate-500">
+              {view.index + 1} / {group.articles.length}
+            </span>
+          ) : (
+            <button
+              onClick={() => setShowList((s) => !s)}
+              className="flex items-center gap-1.5 rounded-full bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition active:scale-95"
+            >
+              ☰ {view.index + 1} / {group.articles.length}
+              <span className="text-xs">{showList ? '▲' : '▼'}</span>
+            </button>
+          )}
         </div>
+
+        {showList && !view.fromReview && (
+          <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 bg-surface shadow-sm">
+            {group.articles.map((a, i) => {
+              const line = lines.get(a.id)
+              const current = i === view.index
+              return (
+                <button
+                  key={a.id}
+                  onClick={() => jumpTo(group, i)}
+                  className={`flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left ${
+                    current ? 'bg-brand-50' : 'hover:bg-slate-50'
+                  }`}
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span
+                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
+                        line ? 'bg-green-600 text-white' : 'bg-slate-200 text-slate-500'
+                      }`}
+                    >
+                      {line ? '✓' : i + 1}
+                    </span>
+                    <span className={`truncate ${current ? 'font-semibold text-brand-700' : 'text-slate-800'}`}>{a.name}</span>
+                  </span>
+                  <span className="shrink-0 text-right text-sm text-slate-500">
+                    {line ? describeInput(a, line.input, line.counted) : '—'}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        )}
 
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{group.name}</p>
