@@ -1,0 +1,27 @@
+# Netlify build settings. Supabase keys come from .env.local for local
+# deploys, or from Site settings → Environment variables when Netlify builds.
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# Single-page app: every route serves index.html.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Always fetch the newest app shell / service worker after a deploy.
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

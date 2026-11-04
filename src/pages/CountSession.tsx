@@ -1,0 +1,291 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import {
+  finishCount,
+  getCount,
+  listArticles,
+  listCategories,
+  listLinesForCount,
+  saveLine,
+  setCategoryDone,
+} from '../data/repository'
+import type { Article, Count, CountInput, CountLine } from '../data/types'
+import { describeInput } from '../lib/measure'
+import { MeasureInput } from '../components/MeasureInput'
+import { Button, Spinner } from '../components/ui'
+
+const NO_CAT = '__none'
+
+interface Group {
+  id: string
+  name: string
+  articles: Article[]
+}
+
+type View =
+  | { mode: 'categories' }
+  | { mode: 'article'; groupId: string; index: number; fromReview: boolean }
+  | { mode: 'review' }
+
+export function CountSession() {
+  const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
+  const [count, setCount] = useState<Count | null>(null)
+  const [groups, setGroups] = useState<Group[]>([])
+  const [lines, setLines] = useState<Map<string, CountLine>>(new Map())
+  const [view, setView] = useState<View>({ mode: 'categories' })
+  const [loading, setLoading] = useState(true)
+  const [finishing, setFinishing] = useState(false)
+
+  useEffect(() => {
+    if (!id) return
+    ;(async () => {
+      const [c, articles, categories, ls] = await Promise.all([
+        getCount(id),
+        listArticles({ activeOnly: true }),
+        listCategories(),
+        listLinesForCount(id),
+      ])
+      const gs: Group[] = categories.map((cat) => ({
+        id: cat.id,
+        name: cat.name,
+        articles: articles.filter((a) => a.category_id === cat.id),
+      }))
+      const known = new Set(categories.map((cat) => cat.id))
+      const orphans = articles.filter((a) => !a.category_id || !known.has(a.category_id))
+      if (orphans.length) gs.push({ id: NO_CAT, name: 'Bez kategorije', articles: orphans })
+      setCount(c ?? null)
+      setGroups(gs.filter((g) => g.articles.length > 0))
+      setLines(new Map(ls.map((l) => [l.article_id, l])))
+      setLoading(false)
+    })()
+  }, [id])
+
+  const savingRef = useRef(false)
+
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [view])
+
+  const done = useMemo(() => new Set(count?.done_categories ?? []), [count])
+  const allDone = groups.length > 0 && groups.every((g) => done.has(g.id))
+
+  if (loading) return <Spinner />
+  if (!count || !id) return <p className="text-slate-500">Popis nije pronađen.</p>
+  if (count.status === 'finished') {
+    return (
+      <div className="space-y-3">
+        <p className="text-slate-600">Ovaj popis je već završen.</p>
+        <Button onClick={() => navigate('/count')}>Nazad</Button>
+      </div>
+    )
+  }
+
+  const firstOpenIndex = (g: Group) => {
+    const i = g.articles.findIndex((a) => !lines.has(a.id))
+    return i === -1 ? 0 : i
+  }
+
+  const openGroup = (g: Group) =>
+    setView({ mode: 'article', groupId: g.id, index: firstOpenIndex(g), fromReview: false })
+
+  const onSubmit = async (group: Group, index: number, input: CountInput, fromReview: boolean) => {
+    // Ignore double taps while the previous entry is still saving.
+    if (savingRef.current) return
+    savingRef.current = true
+    const article = group.articles[index]
+    const line = await saveLine(id, article, input).finally(() => {
+      savingRef.current = false
+    })
+    const next = new Map(lines).set(article.id, line)
+    setLines(next)
+    if (fromReview) {
+      setView({ mode: 'review' })
+      return
+    }
+    const open = group.articles.findIndex((a, i) => i > index && !next.has(a.id))
+    if (open !== -1) {
+      setView({ mode: 'article', groupId: group.id, index: open, fromReview })
+      return
+    }
+    const earlier = group.articles.findIndex((a) => !next.has(a.id))
+    if (earlier !== -1) {
+      setView({ mode: 'article', groupId: group.id, index: earlier, fromReview })
+      return
+    }
+    // Every article in the category has a value → category is done.
+    const updated = await setCategoryDone(id, group.id, true)
+    if (updated) setCount(updated)
+    setView({ mode: 'categories' })
+  }
+
+  const finish = async () => {
+    setFinishing(true)
+    await finishCount(id)
+    navigate('/count', { state: { finished: true } })
+  }
+
+  // --- One article at a time -------------------------------------------------
+  if (view.mode === 'article') {
+    const group = groups.find((g) => g.id === view.groupId)
+    if (!group) return null
+    const article = group.articles[view.index]
+    const filled = group.articles.filter((a) => lines.has(a.id)).length
+    return (
+      <div className="space-y-5 pb-10">
+        <div className="flex items-center justify-between">
+          <button
+            onClick={() => setView(view.fromReview ? { mode: 'review' } : { mode: 'categories' })}
+            className="text-sm font-medium text-brand-700"
+          >
+            ← {view.fromReview ? 'Pregled' : 'Kategorije'}
+          </button>
+          <span className="text-sm text-slate-500">
+            {view.index + 1} / {group.articles.length}
+          </span>
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{group.name}</p>
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200">
+            <div
+              className="h-full bg-brand-500 transition-all"
+              style={{ width: `${(filled / group.articles.length) * 100}%` }}
+            />
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h1 className="mb-5 text-2xl font-bold text-slate-800">{article.name}</h1>
+          <MeasureInput
+            key={article.id}
+            article={article}
+            initial={lines.get(article.id)?.input ?? null}
+            submitLabel={view.fromReview ? 'Sačuvaj' : 'Dalje →'}
+            onSubmit={(input) => onSubmit(group, view.index, input, view.fromReview)}
+          />
+        </div>
+
+        {!view.fromReview && (
+          <div className="flex justify-between">
+            <Button
+              variant="ghost"
+              disabled={view.index === 0}
+              onClick={() => setView({ ...view, index: view.index - 1 })}
+            >
+              ← Prethodni
+            </Button>
+            {lines.has(article.id) && view.index < group.articles.length - 1 && (
+              <Button variant="ghost" onClick={() => setView({ ...view, index: view.index + 1 })}>
+                Sledeći →
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // --- Review before finishing -----------------------------------------------
+  if (view.mode === 'review') {
+    return (
+      <div className="space-y-4 pb-28">
+        <div>
+          <h1 className="text-xl font-bold text-slate-800">Proveri popis</h1>
+          <p className="text-sm text-slate-500">Dodirni stavku da je ispraviš.</p>
+        </div>
+        {groups.map((g) => (
+          <section key={g.id} className="space-y-1.5">
+            <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">{g.name}</h2>
+            <div className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
+              {g.articles.map((a, i) => {
+                const line = lines.get(a.id)
+                return (
+                  <button
+                    key={a.id}
+                    onClick={() => setView({ mode: 'article', groupId: g.id, index: i, fromReview: true })}
+                    className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-slate-50"
+                  >
+                    <span className="min-w-0 truncate text-slate-800">{a.name}</span>
+                    <span
+                      className={`shrink-0 text-right text-sm font-semibold ${
+                        line?.input.kind === 'yes_no'
+                          ? line.input.has ? 'text-green-700' : 'text-red-600'
+                          : 'text-slate-700'
+                      }`}
+                    >
+                      {line ? describeInput(a, line.input, line.counted) : '—'}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </section>
+        ))}
+        <div className="fixed inset-x-0 bottom-0 z-10 border-t border-slate-200 bg-white px-4 py-3">
+          <div className="mx-auto flex max-w-5xl gap-3">
+            <Button variant="ghost" onClick={() => setView({ mode: 'categories' })}>
+              Nazad
+            </Button>
+            <Button onClick={finish} disabled={finishing} className="flex-1 bg-green-600 hover:bg-green-700">
+              {finishing ? 'Čuvam...' : '✓ Sve u redu, završi popis'}
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // --- Category list ---------------------------------------------------------
+  const doneCount = groups.filter((g) => done.has(g.id)).length
+  return (
+    <div className="space-y-4 pb-28">
+      <div>
+        <h1 className="text-xl font-bold text-slate-800">Popis</h1>
+        <p className="text-sm text-slate-500">
+          Izaberi kategoriju, redom koji ti odgovara. Završeno {doneCount} / {groups.length}.
+        </p>
+      </div>
+      <div className="space-y-2">
+        {groups.map((g) => {
+          const filled = g.articles.filter((a) => lines.has(a.id)).length
+          const isDone = done.has(g.id)
+          const started = filled > 0
+          return (
+            <button
+              key={g.id}
+              onClick={() => openGroup(g)}
+              className={`flex w-full items-center justify-between rounded-2xl border-2 p-4 text-left transition-colors ${
+                isDone
+                  ? 'border-green-300 bg-green-50'
+                  : started
+                    ? 'border-amber-300 bg-amber-50'
+                    : 'border-slate-200 bg-white'
+              }`}
+            >
+              <div>
+                <p className={`text-lg font-semibold ${isDone ? 'text-green-800' : 'text-slate-800'}`}>{g.name}</p>
+                <p className="text-sm text-slate-500">
+                  {filled} / {g.articles.length}
+                </p>
+              </div>
+              <span className={`text-sm font-semibold ${isDone ? 'text-green-700' : 'text-brand-700'}`}>
+                {isDone ? '✓ Gotovo' : started ? 'Nastavi →' : 'Počni →'}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+      <div className="fixed inset-x-0 bottom-0 z-10 border-t border-slate-200 bg-white px-4 py-3">
+        <div className="mx-auto flex max-w-5xl gap-3">
+          <Button variant="ghost" onClick={() => navigate('/count')}>
+            Izađi
+          </Button>
+          <Button onClick={() => setView({ mode: 'review' })} disabled={!allDone} className="flex-1">
+            {allDone ? 'Pregled i završetak' : `Preostalo kategorija: ${groups.length - doneCount}`}
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
