@@ -16,7 +16,7 @@ export type OrderStatus = 'pending' | 'ordered'
  */
 export type MeasureKind = 'count' | 'weight' | 'bottle' | 'yes_no' | 'espresso'
 
-export const UNITS = ['kom', 'kg', 'g', 'l', 'kesica', 'kesa', 'kutija', 'bure'] as const
+export const UNITS = ['kom', 'kg', 'g', 'l', 'ml', 'kesica', 'kesa', 'kutija', 'bure'] as const
 export type Unit = (typeof UNITS)[number]
 
 export const ORDER_UNITS = ['kom', 'paket', 'gajba', 'kutija', 'kesa', 'flaša', 'bure', 'kg', 'l'] as const

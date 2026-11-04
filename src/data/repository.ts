@@ -285,6 +285,7 @@ function normalizeUnit(u?: string): Unit {
   const v = (u ?? '').toLowerCase()
   if (v === 'kg') return 'kg'
   if (v === 'lit' || v === 'l') return 'l'
+  if (v === 'ml') return 'ml'
   return 'kom'
 }
 
