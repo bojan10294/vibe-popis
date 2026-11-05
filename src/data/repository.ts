@@ -11,6 +11,7 @@ import type {
   OrderLine,
   OrderStatus,
   Role,
+  Supplier,
   Unit,
   User,
 } from './types'
@@ -38,6 +39,24 @@ export async function deleteCategory(id: string): Promise<void> {
 
 export async function saveCategories(cats: Category[]): Promise<void> {
   if (cats.length) await run(sb().from('categories').upsert(cats))
+}
+
+// ---------------------------------------------------------------------------
+// Suppliers
+// ---------------------------------------------------------------------------
+
+export async function listSuppliers(): Promise<Supplier[]> {
+  const rows = await run<Supplier[]>(sb().from('suppliers').select('*'))
+  return rows.sort(bySortOrder)
+}
+
+export async function saveSuppliers(list: Supplier[]): Promise<void> {
+  if (list.length) await run(sb().from('suppliers').upsert(list))
+}
+
+/** Its articles stay, without a supplier (FK on delete set null). */
+export async function deleteSupplier(id: string): Promise<void> {
+  await run(sb().from('suppliers').delete().eq('id', id))
 }
 
 // ---------------------------------------------------------------------------
@@ -251,6 +270,8 @@ export async function applyBookStockImport(
         code: r.code,
         name: r.name?.trim() || `(nepoznato) ${r.code}`,
         category_id: null,
+        supplier_id: null,
+        regular_target: null,
         kind: 'count',
         unit: normalizeUnit(r.unit),
         allow_decimal: false,

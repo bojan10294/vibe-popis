@@ -317,6 +317,8 @@ export async function seedIfEmpty(): Promise<boolean> {
       id: uuid(),
       name: s.name,
       category_id: cat.id,
+      supplier_id: null,
+      regular_target: null,
       kind: s.kind,
       unit: s.unit,
       allow_decimal: s.allow_decimal ?? false,

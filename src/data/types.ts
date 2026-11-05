@@ -28,6 +28,14 @@ export interface Category {
   sort_order: number
 }
 
+export interface Supplier {
+  id: string
+  name: string
+  /** For sending the order list later. */
+  phone: string | null
+  sort_order: number
+}
+
 export interface BottleSize {
   /** Bottle volume in liters, e.g. 0.7 or 1. */
   size_l: number
@@ -39,6 +47,8 @@ export interface Article {
   id: string
   name: string
   category_id: string | null
+  /** Who we order it from; the order list is grouped by this. */
+  supplier_id: string | null
   kind: MeasureKind
   /** Display unit for count/weight; bottle is always liters, espresso bags. */
   unit: Unit
@@ -50,6 +60,11 @@ export interface Article {
   minimum: number
   /** Regular day: how many order units to order when below the minimum. */
   order_qty: number
+  /**
+   * Regular day "dopuni do": the desired stock in the counting unit. When set,
+   * the order is target − counted (in whole packs) instead of the fixed order_qty.
+   */
+  regular_target: number | null
   /** Unit the supplier sells in: kom, paket, gajba... */
   order_unit: OrderUnit
   /** How much one order unit holds, in the counting unit (paket = 24 kom, flaša = 0.7 l). */

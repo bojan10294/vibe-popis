@@ -3,12 +3,14 @@ import { Link, useParams } from 'react-router-dom'
 import {
   getCount,
   getLatestFinishedCount,
+  listArticles,
   listCategories,
   listOrdersForCount,
+  listSuppliers,
   updateOrderLine,
   setOrderStatus,
 } from '../../data/repository'
-import type { Category, Count, OrderLine } from '../../data/types'
+import type { Article, Category, Count, OrderLine, Supplier } from '../../data/types'
 import { formatNum, isWeekendOrderDay } from '../../lib/measure'
 import { fmtDateTime } from '../../lib/format'
 import { Button, Card, EmptyState, Spinner } from '../../components/ui'
@@ -18,6 +20,8 @@ export function OrderList() {
   const [count, setCount] = useState<Count | null>(null)
   const [orders, setOrders] = useState<OrderLine[]>([])
   const [categories, setCategories] = useState<Category[]>([])
+  const [articles, setArticles] = useState<Article[]>([])
+  const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -25,27 +29,45 @@ export function OrderList() {
       const c = countId ? await getCount(countId) : await getLatestFinishedCount()
       setCount(c ?? null)
       if (c) setOrders(await listOrdersForCount(c.id))
-      setCategories(await listCategories())
+      const [cats, arts, sups] = await Promise.all([listCategories(), listArticles(), listSuppliers()])
+      setCategories(cats)
+      setArticles(arts)
+      setSuppliers(sups)
       setLoading(false)
     })()
   }, [countId])
 
+  // Grouped by supplier (in the order set under Dobavljači), then by category
+  // and article order. Uses the article's current supplier, so assigning one
+  // later also fixes older lists.
   const groups = useMemo(() => {
-    const order = new Map(categories.map((c) => [c.id, c.sort_order]))
-    const name = new Map(categories.map((c) => [c.id, c.name]))
+    const catOrder = new Map(categories.map((c) => [c.id, c.sort_order]))
+    const artById = new Map(articles.map((a) => [a.id, a]))
+    const supById = new Map(suppliers.map((x) => [x.id, x]))
     const map = new Map<string, OrderLine[]>()
     for (const o of orders) {
-      const key = o.category_id && name.has(o.category_id) ? o.category_id : ''
+      const sid = artById.get(o.article_id)?.supplier_id ?? ''
+      const key = supById.has(sid) ? sid : ''
       if (!map.has(key)) map.set(key, [])
       map.get(key)!.push(o)
     }
+    const rank = (o: OrderLine) => [
+      catOrder.get(o.category_id ?? '') ?? 1e9,
+      artById.get(o.article_id)?.sort_order ?? 1e9,
+    ]
     return Array.from(map.entries())
-      .sort(([a], [b]) => (order.get(a) ?? 1e9) - (order.get(b) ?? 1e9))
+      .sort(([a], [b]) => (supById.get(a)?.sort_order ?? 1e9) - (supById.get(b)?.sort_order ?? 1e9))
       .map(([key, list]) => ({
-        name: name.get(key) ?? 'Ostalo',
-        list: list.sort((a, b) => a.article_name.localeCompare(b.article_name)),
+        key,
+        name: supById.get(key)?.name ?? 'Bez dobavljača',
+        phone: supById.get(key)?.phone ?? null,
+        list: list.sort((a, b) => {
+          const [ca, sa] = rank(a)
+          const [cb, sb] = rank(b)
+          return ca - cb || sa - sb || a.article_name.localeCompare(b.article_name)
+        }),
       }))
-  }, [orders, categories])
+  }, [orders, categories, articles, suppliers])
 
   const updateQty = async (line: OrderLine, raw: string) => {
     const qty = Number(raw.replace(',', '.')) || 0
@@ -60,22 +82,22 @@ export function OrderList() {
     await setOrderStatus(line.id, status)
   }
 
-  const asText = () =>
-    groups
-      .map((g) => `${g.name}\n` + g.list.map((o) => `- ${o.article_name}: ${qtyText(o)}`).join('\n'))
-      .join('\n\n')
+  const groupText = (g: (typeof groups)[number]) =>
+    `${g.name}\n` + g.list.map((o) => `- ${o.article_name}: ${qtyText(o)}`).join('\n')
 
-  const copy = async () => {
+  const asText = () => groups.map(groupText).join('\n\n')
+
+  const copy = async (text: string, what: string) => {
     try {
-      await navigator.clipboard.writeText(asText())
-      alert('Lista je kopirana.')
+      await navigator.clipboard.writeText(text)
+      alert(`${what} je kopirana.`)
     } catch {
-      alert(asText())
+      alert(text)
     }
   }
 
   const exportCsv = () => {
-    const header = 'Kategorija,Artikal,Stanje,Minimum,Poruciti,Jedinica,Status,Fali\n'
+    const header = 'Dobavljac,Artikal,Stanje,Minimum,Poruciti,Jedinica,Status,Fali\n'
     const body = groups
       .flatMap((g) =>
         g.list.map((o) =>
@@ -101,6 +123,7 @@ export function OrderList() {
   }
 
   const pending = orders.filter((o) => o.order_status === 'pending').length
+  const artById = new Map(articles.map((a) => [a.id, a]))
   const weekend = isWeekendOrderDay(new Date(count.datetime))
 
   return (
@@ -120,7 +143,7 @@ export function OrderList() {
         </div>
         {orders.length > 0 && (
           <div className="flex gap-2">
-            <Button variant="secondary" onClick={copy} className="text-sm">Kopiraj</Button>
+            <Button variant="secondary" onClick={() => copy(asText(), 'Cela lista')} className="text-sm">Kopiraj sve</Button>
             <Button variant="secondary" onClick={exportCsv} className="text-sm">CSV</Button>
           </div>
         )}
@@ -130,8 +153,19 @@ export function OrderList() {
         <Card className="text-center text-slate-500">Sve je iznad minimuma — nema šta da se poruči.</Card>
       ) : (
         groups.map((g) => (
-          <section key={g.name} className="space-y-1.5">
-            <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">{g.name}</h2>
+          <section key={g.key || 'none'} className="space-y-1.5">
+            <div className="flex items-end justify-between gap-2 px-1">
+              <h2 className="text-sm font-bold text-slate-700">
+                🚚 {g.name} <span className="font-normal text-slate-400">({g.list.length})</span>
+                {g.phone && <span className="ml-2 text-xs font-normal text-slate-400">{g.phone}</span>}
+              </h2>
+              <button
+                onClick={() => copy(groupText(g), `Lista za ${g.name}`)}
+                className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-brand-700 hover:bg-brand-50"
+              >
+                Kopiraj
+              </button>
+            </div>
             <div className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-surface">
               {g.list.map((o) => (
                 <div key={o.id} className={`flex items-center gap-3 px-3 py-2 ${o.order_status === 'ordered' ? 'bg-green-50/60' : ''}`}>
@@ -142,7 +176,7 @@ export function OrderList() {
                         ? 'označeno: nema'
                         : noteOnly(o)
                           ? `ima ${formatNum(o.counted)} ${o.unit}`
-                          : `ima ${formatNum(o.counted)} ${o.unit} · ${weekend ? 'treba' : 'min'} ${formatNum(o.minimum)}`}
+                          : `ima ${formatNum(o.counted)} ${o.unit} · ${weekend ? 'treba' : artById.get(o.article_id)?.regular_target != null ? 'poželjno' : 'min'} ${formatNum(o.minimum)}`}
                     </p>
                     {o.note && <p className="mt-0.5 text-sm font-medium text-red-600">Fali: {o.note}</p>}
                   </div>

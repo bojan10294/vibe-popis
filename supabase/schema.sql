@@ -34,10 +34,18 @@ create table if not exists categories (
   sort_order integer not null default 0
 );
 
+create table if not exists suppliers (
+  id text primary key,
+  name text not null,
+  phone text,
+  sort_order integer not null default 0
+);
+
 create table if not exists articles (
   id text primary key,
   name text not null,
   category_id text references categories (id) on delete set null,
+  supplier_id text references suppliers (id) on delete set null,
   kind text not null check (kind in ('count', 'weight', 'bottle', 'yes_no', 'espresso', 'text')),
   unit text not null,
   allow_decimal boolean not null default false,
@@ -46,6 +54,7 @@ create table if not exists articles (
   minimum_weekend double precision,
   order_qty double precision not null default 1,
   order_qty_weekend double precision,
+  regular_target double precision,
   order_unit text not null default 'kom',
   pack_size double precision not null default 1,
   weekend_target double precision,
@@ -204,6 +213,7 @@ end $$;
 alter table app_users enable row level security;      -- no policies: only via RPC
 alter table app_sessions enable row level security;   -- no policies: only via RPC
 alter table categories enable row level security;
+alter table suppliers enable row level security;
 alter table articles enable row level security;
 alter table counts enable row level security;
 alter table count_lines enable row level security;
@@ -214,7 +224,7 @@ do $$
 declare t text;
 begin
   -- Everyone logged in reads; only admin changes the master data.
-  foreach t in array array['categories', 'articles', 'book_stock_imports'] loop
+  foreach t in array array['categories', 'suppliers', 'articles', 'book_stock_imports'] loop
     execute format('drop policy if exists member_read on %I', t);
     execute format('drop policy if exists admin_write on %I', t);
     execute format('create policy member_read on %I for select using (app_is_member())', t);
@@ -234,7 +244,7 @@ begin
 end $$;
 
 grant usage on schema public to anon, authenticated;
-grant select, insert, update, delete on categories, articles, counts, count_lines, order_lines, book_stock_imports to anon, authenticated;
+grant select, insert, update, delete on categories, suppliers, articles, counts, count_lines, order_lines, book_stock_imports to anon, authenticated;
 revoke all on app_users, app_sessions from anon, authenticated;
 grant execute on function app_login(text, text), app_me(text), app_logout(text),
   app_list_users(), app_save_user(text, text, text, text), app_delete_user(text)

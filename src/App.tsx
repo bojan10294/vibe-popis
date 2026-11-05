@@ -12,6 +12,7 @@ import { Articles } from './pages/admin/Articles'
 import { ImportPage } from './pages/admin/Import'
 import { Users } from './pages/admin/Users'
 import { OrderList } from './pages/admin/OrderList'
+import { Suppliers } from './pages/admin/Suppliers'
 import type { Role } from './data/types'
 
 function IndexRedirect() {
@@ -55,6 +56,7 @@ function AppRoutes() {
       <Route path="/admin/counts" element={<RequireRole role="admin"><Counts /></RequireRole>} />
       <Route path="/admin/counts/:id" element={<RequireRole role="admin"><CountDetail /></RequireRole>} />
       <Route path="/admin/articles" element={<RequireRole role="admin"><Articles /></RequireRole>} />
+      <Route path="/admin/suppliers" element={<RequireRole role="admin"><Suppliers /></RequireRole>} />
       <Route path="/admin/import" element={<RequireRole role="admin"><ImportPage /></RequireRole>} />
       <Route path="/admin/users" element={<RequireRole role="admin"><Users /></RequireRole>} />
       <Route path="/admin/orders" element={<RequireRole role="admin"><OrderList /></RequireRole>} />

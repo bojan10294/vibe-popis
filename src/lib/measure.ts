@@ -86,14 +86,26 @@ export function usesWeekendTarget(article: Article, date: Date): boolean {
   return article.kind !== 'yes_no' && article.weekend_target != null && isWeekendOrderDay(date)
 }
 
-/** The stock level the order is based on: weekend target on Thursday, else the minimum. */
+/** The stock level the order is based on: weekend target on Thursday, else the regular target or minimum. */
 export function orderThreshold(article: Article, date: Date): number {
-  return usesWeekendTarget(article, date) ? article.weekend_target! : article.minimum
+  if (usesWeekendTarget(article, date)) return article.weekend_target!
+  return article.regular_target ?? article.minimum
+}
+
+/** Whole packs needed to get from `counted` up to `target` (0 if already there). */
+function packsToReach(article: Article, target: number, counted: number): number {
+  const missing = round(target - counted)
+  if (missing <= 0) return 0
+  const pack = article.pack_size > 0 ? article.pack_size : 1
+  const packs = Math.ceil(round(missing / pack))
+  // Ordered in the counting unit itself (kg → kg): round up to the step, e.g. 0,5 kg.
+  return article.order_unit === unitLabel(article) ? round(packs * pack) : packs
 }
 
 /**
  * How many order units (paket, gajba, flaša...) to order, or 0.
  *  - Thursday with a weekend target: enough whole packs to reach the target.
+ *  - Regular target ("dopuni do"): enough whole packs to reach it.
  *  - Otherwise: the fixed regular quantity once stock is below the minimum.
  *  - Ima/nema: the regular quantity when marked "nema".
  * A written "what is missing" note puts the article on the list regardless
@@ -106,10 +118,11 @@ export function orderQuantity(article: Article, input: CountInput | null, date: 
     return input?.kind === 'yes_no' && input.has ? 0 : article.order_qty
   }
   const counted = input ? quantityOf(article, input) : 0
-  if (usesWeekendTarget(article, date)) {
-    const missing = round(article.weekend_target! - counted)
-    if (missing <= 0) return 0
-    return Math.ceil(round(missing / (article.pack_size > 0 ? article.pack_size : 1)))
+  if (usesWeekendTarget(article, date)) return packsToReach(article, article.weekend_target!, counted)
+  if (article.regular_target != null) {
+    // "Dopuni do": order the difference; with a minimum, only once below it.
+    if (article.minimum > 0 && counted >= article.minimum) return 0
+    return packsToReach(article, article.regular_target, counted)
   }
   if (!article.minimum || counted >= article.minimum) return 0
   return article.order_qty

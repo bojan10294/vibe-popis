@@ -4,12 +4,13 @@ import {
   deleteCategory,
   listArticles,
   listCategories,
+  listSuppliers,
   saveArticles,
   saveCategories,
   upsertArticle,
   upsertCategory,
 } from '../../data/repository'
-import { ORDER_UNITS, UNITS, type Article, type Category, type MeasureKind, type OrderUnit, type Unit } from '../../data/types'
+import { ORDER_UNITS, UNITS, type Article, type Category, type MeasureKind, type Supplier, type OrderUnit, type Unit } from '../../data/types'
 import { uuid } from '../../lib/crypto'
 import { KIND_LABELS, WEEKDAYS_ON, formatNum, formatSize, unitLabel } from '../../lib/measure'
 import { Button, Input, Select, Spinner } from '../../components/ui'
@@ -19,14 +20,16 @@ const NO_CAT = '__none'
 export function Articles() {
   const [articles, setArticles] = useState<Article[]>([])
   const [categories, setCategories] = useState<Category[]>([])
+  const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [query, setQuery] = useState('')
   const [editing, setEditing] = useState<Article | null>(null)
   const [loading, setLoading] = useState(true)
 
   const reload = async () => {
-    const [a, c] = await Promise.all([listArticles(), listCategories()])
+    const [a, c, sup] = await Promise.all([listArticles(), listCategories(), listSuppliers()])
     setArticles(a)
     setCategories(c)
+    setSuppliers(sup)
     setLoading(false)
   }
 
@@ -54,6 +57,8 @@ export function Articles() {
       id: uuid(),
       name: '',
       category_id: categoryId,
+      supplier_id: null,
+      regular_target: null,
       kind: 'count',
       unit: 'kom',
       allow_decimal: false,
@@ -134,6 +139,8 @@ export function Articles() {
 
   if (loading) return <Spinner />
 
+  const supplierName = new Map(suppliers.map((x) => [x.id, x.name]))
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -193,7 +200,7 @@ export function Articles() {
                   <p className={`font-medium leading-tight ${a.active ? 'text-slate-800' : 'text-slate-400 line-through'}`}>
                     {a.name}
                   </p>
-                  <p className="mt-0.5 text-xs leading-tight text-slate-400">{summary(a)}</p>
+                  <p className="mt-0.5 text-xs leading-tight text-slate-400">{summary(a, supplierName.get(a.supplier_id ?? ''))}</p>
                 </button>
                 <button
                   onClick={() => toggleActive(a)}
@@ -225,6 +232,7 @@ export function Articles() {
           article={editing}
           isNew={!articles.some((a) => a.id === editing.id)}
           categories={categories}
+          suppliers={suppliers}
           onClose={() => setEditing(null)}
           onSaved={() => {
             setEditing(null)
@@ -237,8 +245,9 @@ export function Articles() {
   )
 }
 
-function summary(a: Article): string {
+function summary(a: Article, supplier?: string): string {
   const parts = [KIND_LABELS[a.kind]]
+  parts.unshift(supplier ? `🚚 ${supplier}` : '⚠ bez dobavljača')
   if (a.count_weekday != null) parts.unshift(`📅 samo ${WEEKDAYS_ON[a.count_weekday]}`)
   if (a.kind === 'bottle') {
     parts.push(
@@ -258,7 +267,13 @@ function summary(a: Article): string {
     parts.push(`nema → ${formatNum(a.order_qty)} ${a.order_unit}`)
     return parts.join(' · ')
   }
-  parts.push(`ispod ${formatNum(a.minimum)} ${u} → ${formatNum(a.order_qty)} ${a.order_unit}`)
+  if (a.regular_target != null) {
+    parts.push(
+      `dopuni do ${formatNum(a.regular_target)} ${u}` + (a.minimum > 0 ? ` (kad ima < ${formatNum(a.minimum)})` : ''),
+    )
+  } else {
+    parts.push(`ispod ${formatNum(a.minimum)} ${u} → ${formatNum(a.order_qty)} ${a.order_unit}`)
+  }
   if (packMissing(a)) parts.push(`⚠ upiši koliko ${u} ima u 1 ${a.order_unit}`)
   else if (a.pack_size !== 1 || a.order_unit !== u) parts.push(`1 ${a.order_unit} = ${formatNum(a.pack_size)} ${u}`)
   if (a.weekend_target != null) parts.push(`vikend: ${formatNum(a.weekend_target)} ${u}`)
@@ -340,12 +355,23 @@ function weekendExample(target: number | null, pack: number, orderUnit: string, 
   return `Primer: ako ima ${formatNum(has)} ${unit}, fali ${formatNum(target - has)} → poruči ${packs} ${orderUnit} (biće ${formatNum(has + packs * pack)} ${unit}).`
 }
 
+/** Worked example for "dopuni do", e.g. "ako ima 2 kg → poruči 3 kg (biće 5 kg)". */
+function fillExample(target: number | null, min: number | null, pack: number, orderUnit: string, unit: string): string | null {
+  if (target == null || target <= 0) return null
+  const has = Math.round(target * 0.4 * 10) / 10
+  const packs = Math.ceil(Math.round(((target - has) / pack) * 1000) / 1000)
+  const when = min ? ` Ako ima ${formatNum(min)} ${unit} ili više, ne poručuje se.` : ''
+  const qty = orderUnit === unit ? packs * pack : packs
+  return `Primer: ako ima ${formatNum(has)} ${unit} → poruči ${formatNum(qty)} ${orderUnit} (biće ${formatNum(has + packs * pack)} ${unit}).${when}`
+}
+
 const COUNT_UNITS: Unit[] = UNITS.filter((u) => u !== 'kg' && u !== 'g')
 
 function ArticleEditor({
   article,
   isNew,
   categories,
+  suppliers,
   onClose,
   onSaved,
   onDelete,
@@ -353,6 +379,7 @@ function ArticleEditor({
   article: Article
   isNew: boolean
   categories: Category[]
+  suppliers: Supplier[]
   onClose: () => void
   onSaved: () => void
   onDelete: () => void
@@ -361,6 +388,10 @@ function ArticleEditor({
   // Number fields are edited as strings so "0," or "" don't jump around.
   const [minimum, setMinimum] = useState(String(article.minimum))
   const [orderQty, setOrderQty] = useState(String(article.order_qty))
+  const [fillMode, setFillMode] = useState(article.regular_target != null)
+  const [regularTarget, setRegularTarget] = useState(
+    article.regular_target == null ? '' : String(article.regular_target),
+  )
   const [packSize, setPackSize] = useState(String(article.pack_size))
   const [weekendTarget, setWeekendTarget] = useState(
     article.weekend_target == null ? '' : String(article.weekend_target),
@@ -410,6 +441,7 @@ function ArticleEditor({
       name: draft.name.trim(),
       minimum: num(minimum) ?? 0,
       order_qty: num(orderQty) ?? 1,
+      regular_target: fillMode ? num(regularTarget) : null,
       pack_size: num(packSize) || 1,
       weekend_target: num(weekendTarget),
       bottle_sizes:
@@ -461,6 +493,12 @@ function ArticleEditor({
               </Select>
             </L>
           </div>
+          <L label="Dobavljač">
+            <Select value={draft.supplier_id ?? ''} onChange={(e) => set('supplier_id', e.target.value || null)}>
+              <option value="">— bez dobavljača —</option>
+              {suppliers.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+            </Select>
+          </L>
 
           {draft.kind === 'count' && (
             <div className="grid grid-cols-2 items-end gap-3">
@@ -585,18 +623,60 @@ function ArticleEditor({
                 </div>
 
                 <div>
-                  <p className="mb-1 text-xs font-medium text-slate-500">Običan dan</p>
-                  <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
-                    <span>Ispod</span>
-                    <div className="w-20">
-                      <Input inputMode="decimal" value={minimum} onChange={(e) => setMinimum(e.target.value)} />
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <p className="text-xs font-medium text-slate-500">Običan dan</p>
+                    <div className="flex rounded-lg bg-slate-200 p-0.5 text-xs font-semibold">
+                      {([
+                        [false, 'Uvek ista količina'],
+                        [true, 'Dopuni do poželjnog'],
+                      ] as const).map(([mode, label]) => (
+                        <button
+                          key={label}
+                          type="button"
+                          onClick={() => setFillMode(mode)}
+                          className={`rounded-md px-2.5 py-1 transition ${
+                            fillMode === mode ? 'bg-surface text-slate-800 shadow-sm' : 'text-slate-500'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
                     </div>
-                    <span>{minUnit} → poruči</span>
-                    <div className="w-16">
-                      <Input inputMode="decimal" value={orderQty} onChange={(e) => setOrderQty(e.target.value)} />
-                    </div>
-                    <span>{draft.order_unit}</span>
                   </div>
+                  {fillMode ? (
+                    <div className="space-y-2 text-sm text-slate-600">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span>Poželjno da ima</span>
+                        <div className="w-20">
+                          <Input inputMode="decimal" value={regularTarget} onChange={(e) => setRegularTarget(e.target.value)} />
+                        </div>
+                        <span>{minUnit}</span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span>Poruči tek kad ima manje od</span>
+                        <div className="w-20">
+                          <Input inputMode="decimal" value={minimum} placeholder="—" onChange={(e) => setMinimum(e.target.value)} />
+                        </div>
+                        <span>{minUnit}</span>
+                      </div>
+                      <p className="text-xs text-slate-400">
+                        {fillExample(num(regularTarget), num(minimum), num(packSize) || 1, draft.order_unit, minUnit) ??
+                          'Poručuje se razlika do poželjnog. Prazno „manje od” = poruči čim nešto fali.'}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
+                      <span>Ispod</span>
+                      <div className="w-20">
+                        <Input inputMode="decimal" value={minimum} onChange={(e) => setMinimum(e.target.value)} />
+                      </div>
+                      <span>{minUnit} → poruči</span>
+                      <div className="w-16">
+                        <Input inputMode="decimal" value={orderQty} onChange={(e) => setOrderQty(e.target.value)} />
+                      </div>
+                      <span>{draft.order_unit}</span>
+                    </div>
+                  )}
                 </div>
 
                 <div>
