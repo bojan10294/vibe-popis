@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { createCount, getActiveCountForUser, listArticles } from '../data/repository'
 import { Card, Spinner } from '../components/ui'
+import { Fireworks } from '../components/Fireworks'
 import { countedOn } from '../lib/measure'
 
 export function StaffHome() {
@@ -44,6 +45,7 @@ export function StaffHome() {
         <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Zdravo, {user.name} 👋</h1>
       </div>
 
+      {justFinished && !activeId && <Fireworks />}
       {justFinished && !activeId && (
         <Card className="flex items-center gap-3 border-green-200 bg-green-50">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-green-600 text-white">✓</span>
