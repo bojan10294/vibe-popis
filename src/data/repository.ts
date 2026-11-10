@@ -8,11 +8,12 @@ import type {
   Count,
   CountInput,
   CountLine,
+  LagerArticle,
+  LagerStock,
   OrderLine,
   OrderStatus,
   Role,
   Supplier,
-  Unit,
   User,
 } from './types'
 
@@ -209,105 +210,100 @@ export async function saveLine(countId: string, article: Article, input: CountIn
 }
 
 // ---------------------------------------------------------------------------
-// Book-stock imports (lager lista) — will be reworked later
+// Lager lista (accountant's book stock, uploaded as PDF)
 // ---------------------------------------------------------------------------
 
 export async function listImports(): Promise<BookStockImport[]> {
   return run<BookStockImport[]>(sb().from('book_stock_imports').select('*').order('date', { ascending: false }))
 }
 
-export interface ImportRecord {
-  code: string
-  name?: string
-  unit?: Unit | string
-  stanje: number
-  cena: number
+/** The accountant's articles from the uploaded PDFs, by name. */
+export async function listLagerArticles(): Promise<LagerArticle[]> {
+  const rows = await run<LagerArticle[]>(sb().from('lager_articles').select('*'))
+  return rows.sort((a, b) => a.name.localeCompare(b.name))
 }
 
-export interface ApplyResult {
-  matched: number
-  created: number
-  unmatched: ImportRecord[]
-  totalChecks: { stanje: number; iznos?: number }
+/** Dates for which a Lager lista was uploaded, newest first. */
+export async function listLagerDates(): Promise<string[]> {
+  const imports = await listImports()
+  return [...new Set(imports.map((i) => i.date))]
 }
 
-const norm = (s: string) => s.trim().toLowerCase()
+/** The accountant's Stanje of every article on one day. */
+export async function listLagerStock(date: string): Promise<LagerStock[]> {
+  return run<LagerStock[]>(sb().from('lager_stock').select('*').eq('date', date))
+}
+
+/** "Artikal (knjigovodstvo)" chosen for one of our articles. */
+export interface LagerLink {
+  articleId: string
+  code: string | null
+  factor: number
+}
+
+export interface LagerImportResult {
+  rows: number
+  linked: number
+  /** False when an older PDF was uploaded after a newer one (latest values kept). */
+  isLatest: boolean
+}
 
 /**
- * Apply a parsed lager-lista import: matches articles by code (or by name),
- * updating book_stock + last_unit_price; unknown rows become new, inactive
- * articles without a category.
+ * Saves an uploaded Lager lista: the accountant's articles (latest values),
+ * that day's Stanje for every article, and the links of our articles. Our
+ * linked articles get the book stock in their own unit (stanje / factor) when
+ * they are the only one linked to that code.
  */
-export async function applyBookStockImport(
+export async function saveLagerImport(
   date: string,
-  source: string,
-  records: ImportRecord[],
-  totals?: { stanje?: number; iznos?: number },
-): Promise<ApplyResult> {
-  const all = await listArticles()
-  const byCode = new Map(all.filter((a) => a.code).map((a) => [a.code!, a]))
-  const byName = new Map(all.map((a) => [norm(a.name), a]))
-  let maxSort = all.reduce((m, a) => Math.max(m, a.sort_order), 0)
+  fileName: string,
+  rows: Omit<LagerStock, 'date'>[],
+  links: LagerLink[],
+): Promise<LagerImportResult> {
+  const known = await listLagerArticles()
+  const asOf = new Map(known.map((a) => [a.code, a.as_of]))
+  const isLatest = known.every((a) => a.as_of <= date)
 
-  const toUpsert: Article[] = []
-  const unmatched: ImportRecord[] = []
-  let matched = 0
+  const fresh = rows.filter((r) => (asOf.get(r.code) ?? '') <= date)
+  if (fresh.length) {
+    await run(
+      sb()
+        .from('lager_articles')
+        .upsert(fresh.map((r) => ({ code: r.code, name: r.name, unit: r.unit, stanje: r.stanje, cena: r.cena, as_of: date }))),
+    )
+  }
+  await run(sb().from('lager_stock').upsert(rows.map((r) => ({ ...r, date })), { onConflict: 'date,code' }))
+  await run(
+    sb().from('book_stock_imports').insert({ id: uuid(), date, source: `pdf:${fileName}`, raw_ref: `rows:${rows.length}` }),
+  )
 
-  for (const r of records) {
-    const existing = byCode.get(r.code) ?? (r.name ? byName.get(norm(r.name)) : undefined)
-    if (existing) {
-      matched++
-      toUpsert.push({
-        ...existing,
-        code: existing.code ?? r.code,
-        book_stock: round(r.stanje),
-        last_unit_price: round(r.cena, 2),
-      })
-    } else {
-      unmatched.push(r)
-      toUpsert.push({
-        id: uuid(),
-        code: r.code,
-        name: r.name?.trim() || `(nepoznato) ${r.code}`,
-        category_id: null,
-        supplier_id: null,
-        regular_target: null,
-        kind: 'count',
-        unit: normalizeUnit(r.unit),
-        allow_decimal: false,
-        bottle_sizes: [],
-        minimum: 0,
-        order_qty: 1,
-        pack_size: 1,
-        weekend_target: null,
-        ask_note: false,
-        count_weekday: null,
-        order_unit: 'kom',
-        active: false,
-        sort_order: ++maxSort,
-        last_unit_price: round(r.cena, 2),
-        book_stock: round(r.stanje),
-      })
+  const linkOf = new Map(links.map((l) => [l.articleId, l]))
+  const all = (await listArticles()).map((a) => {
+    const l = linkOf.get(a.id)
+    return l ? { ...a, code: l.code, book_factor: l.factor } : a
+  })
+  const rowOf = new Map(rows.map((r) => [r.code, r]))
+  const uses = new Map<string, number>()
+  for (const a of all) if (a.code) uses.set(a.code, (uses.get(a.code) ?? 0) + 1)
+
+  const toSave: Article[] = []
+  for (const a of all) {
+    const row = a.code ? rowOf.get(a.code) : undefined
+    if (!linkOf.has(a.id) && !row) continue
+    if (!isLatest) {
+      if (linkOf.has(a.id)) toSave.push(a)
+      continue
     }
+    const f = a.book_factor || 1
+    toSave.push({
+      ...a,
+      book_stock: row && uses.get(row.code) === 1 ? round(row.stanje / f) : null,
+      last_unit_price: row ? round(row.cena * f, 2) : a.last_unit_price,
+    })
   }
+  await saveArticles(toSave)
 
-  await saveArticles(toUpsert)
-  await run(sb().from('book_stock_imports').insert({ id: uuid(), date, source, raw_ref: `records:${records.length}` }))
-
-  return {
-    matched,
-    created: unmatched.length,
-    unmatched,
-    totalChecks: { stanje: round(records.reduce((s, r) => s + r.stanje, 0)), iznos: totals?.iznos },
-  }
-}
-
-function normalizeUnit(u?: string): Unit {
-  const v = (u ?? '').toLowerCase()
-  if (v === 'kg') return 'kg'
-  if (v === 'lit' || v === 'l') return 'l'
-  if (v === 'ml') return 'ml'
-  return 'kom'
+  return { rows: rows.length, linked: all.filter((a) => a.code && rowOf.has(a.code)).length, isLatest }
 }
 
 // ---------------------------------------------------------------------------

@@ -64,7 +64,9 @@ create table if not exists articles (
   sort_order integer not null default 0,
   code text,
   last_unit_price double precision not null default 0,
-  book_stock double precision
+  book_stock double precision,
+  -- 1 of our counting unit = book_factor of the accountant's unit (1 bure = 20 l)
+  book_factor double precision not null default 1
 );
 create index if not exists articles_category_idx on articles (category_id);
 
@@ -120,6 +122,30 @@ create table if not exists book_stock_imports (
   date date not null,
   source text not null,
   raw_ref text not null
+);
+
+-- Accountant's "Lager lista": every article seen in the PDFs (latest values);
+-- our articles link to one via articles.code.
+create table if not exists lager_articles (
+  code text primary key,
+  name text not null,
+  unit text not null default '',
+  stanje double precision not null default 0,
+  cena double precision not null default 0,
+  as_of date not null
+);
+
+-- Stanje per article per day (one row per uploaded PDF date).
+create table if not exists lager_stock (
+  date date not null,
+  code text not null,
+  name text not null,
+  unit text not null default '',
+  ulaz double precision not null default 0,
+  izlaz double precision not null default 0,
+  stanje double precision not null default 0,
+  cena double precision not null default 0,
+  primary key (date, code)
 );
 
 -- ---------------------------------------------------------------------------
@@ -219,12 +245,14 @@ alter table counts enable row level security;
 alter table count_lines enable row level security;
 alter table order_lines enable row level security;
 alter table book_stock_imports enable row level security;
+alter table lager_articles enable row level security;
+alter table lager_stock enable row level security;
 
 do $$
 declare t text;
 begin
   -- Everyone logged in reads; only admin changes the master data.
-  foreach t in array array['categories', 'suppliers', 'articles', 'book_stock_imports'] loop
+  foreach t in array array['categories', 'suppliers', 'articles', 'book_stock_imports', 'lager_articles', 'lager_stock'] loop
     execute format('drop policy if exists member_read on %I', t);
     execute format('drop policy if exists admin_write on %I', t);
     execute format('create policy member_read on %I for select using (app_is_member())', t);
@@ -244,7 +272,7 @@ begin
 end $$;
 
 grant usage on schema public to anon, authenticated;
-grant select, insert, update, delete on categories, suppliers, articles, counts, count_lines, order_lines, book_stock_imports to anon, authenticated;
+grant select, insert, update, delete on categories, suppliers, articles, counts, count_lines, order_lines, book_stock_imports, lager_articles, lager_stock to anon, authenticated;
 revoke all on app_users, app_sessions from anon, authenticated;
 grant execute on function app_login(text, text), app_me(text), app_logout(text),
   app_list_users(), app_save_user(text, text, text, text), app_delete_user(text)

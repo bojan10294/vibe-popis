@@ -92,12 +92,20 @@ export function CountDetail() {
           </div>
         </div>
         {count.status === 'finished' && (
-          <Link
-            to={`/admin/orders/${count.id}`}
-            className="rounded-xl bg-brand-600 px-4 py-2.5 font-medium text-white hover:bg-brand-700"
-          >
-            Lista nabavke ({orderCount})
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              to={`/admin/compare?count=${count.id}`}
+              className="rounded-xl border border-slate-200 bg-surface px-4 py-2.5 font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Uporedi sa knjigovodstvom
+            </Link>
+            <Link
+              to={`/admin/orders/${count.id}`}
+              className="rounded-xl bg-brand-600 px-4 py-2.5 font-medium text-white hover:bg-brand-700"
+            >
+              Lista nabavke ({orderCount})
+            </Link>
+          </div>
         )}
       </div>
 

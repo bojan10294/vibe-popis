@@ -4,15 +4,17 @@ import {
   deleteCategory,
   listArticles,
   listCategories,
+  listLagerArticles,
   listSuppliers,
   saveArticles,
   saveCategories,
   upsertArticle,
   upsertCategory,
 } from '../../data/repository'
-import { ORDER_UNITS, UNITS, type Article, type Category, type MeasureKind, type Supplier, type OrderUnit, type Unit } from '../../data/types'
+import { ORDER_UNITS, UNITS, type Article, type Category, type LagerArticle, type MeasureKind, type Supplier, type OrderUnit, type Unit } from '../../data/types'
 import { uuid } from '../../lib/crypto'
 import { KIND_LABELS, WEEKDAYS_ON, formatNum, formatSize, unitLabel } from '../../lib/measure'
+import { bookUnitLabel, isRetired, suggestFactor } from '../../lib/lager'
 import { Button, Input, Select, Spinner } from '../../components/ui'
 
 const NO_CAT = '__none'
@@ -21,15 +23,23 @@ export function Articles() {
   const [articles, setArticles] = useState<Article[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [lager, setLager] = useState<LagerArticle[]>([])
   const [query, setQuery] = useState('')
   const [editing, setEditing] = useState<Article | null>(null)
   const [loading, setLoading] = useState(true)
 
   const reload = async () => {
-    const [a, c, sup] = await Promise.all([listArticles(), listCategories(), listSuppliers()])
+    const [a, c, sup, lg] = await Promise.all([
+      listArticles(),
+      listCategories(),
+      listSuppliers(),
+      // Empty until the first PDF is uploaded (or migration 011 is run).
+      listLagerArticles().catch(() => [] as LagerArticle[]),
+    ])
     setArticles(a)
     setCategories(c)
     setSuppliers(sup)
+    setLager(lg)
     setLoading(false)
   }
 
@@ -140,6 +150,7 @@ export function Articles() {
   if (loading) return <Spinner />
 
   const supplierName = new Map(suppliers.map((x) => [x.id, x.name]))
+  const lagerName = new Map(lager.map((x) => [x.code, x.name]))
 
   return (
     <div className="space-y-5">
@@ -200,7 +211,7 @@ export function Articles() {
                   <p className={`font-medium leading-tight ${a.active ? 'text-slate-800' : 'text-slate-400 line-through'}`}>
                     {a.name}
                   </p>
-                  <p className="mt-0.5 text-xs leading-tight text-slate-400">{summary(a, supplierName.get(a.supplier_id ?? ''))}</p>
+                  <p className="mt-0.5 text-xs leading-tight text-slate-400">{summary(a, supplierName.get(a.supplier_id ?? ''), a.code ? (lagerName.get(a.code) ?? a.code) : undefined)}</p>
                 </button>
                 <button
                   onClick={() => toggleActive(a)}
@@ -233,6 +244,7 @@ export function Articles() {
           isNew={!articles.some((a) => a.id === editing.id)}
           categories={categories}
           suppliers={suppliers}
+          lager={lager}
           onClose={() => setEditing(null)}
           onSaved={() => {
             setEditing(null)
@@ -245,9 +257,10 @@ export function Articles() {
   )
 }
 
-function summary(a: Article, supplier?: string): string {
+function summary(a: Article, supplier?: string, book?: string): string {
   const parts = [KIND_LABELS[a.kind]]
   parts.unshift(supplier ? `🚚 ${supplier}` : '⚠ bez dobavljača')
+  if (book) parts.unshift(`📒 ${book}`)
   if (a.count_weekday != null) parts.unshift(`📅 samo ${WEEKDAYS_ON[a.count_weekday]}`)
   if (a.kind === 'bottle') {
     parts.push(
@@ -372,6 +385,7 @@ function ArticleEditor({
   isNew,
   categories,
   suppliers,
+  lager,
   onClose,
   onSaved,
   onDelete,
@@ -380,6 +394,7 @@ function ArticleEditor({
   isNew: boolean
   categories: Category[]
   suppliers: Supplier[]
+  lager: LagerArticle[]
   onClose: () => void
   onSaved: () => void
   onDelete: () => void
@@ -402,6 +417,7 @@ function ArticleEditor({
       empty: s.empty_weight_g == null ? '' : String(s.empty_weight_g),
     })),
   )
+  const [bookFactor, setBookFactor] = useState(String(article.book_factor ?? 1))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -435,9 +451,13 @@ function ArticleEditor({
     onSaved()
   }
 
+  const bookLinkTouched = (draft.code ?? null) !== (article.code ?? null) || bookFactor !== String(article.book_factor ?? 1)
+
   const persist = () =>
     upsertArticle({
       ...draft,
+      // book_factor is only sent when used, so saving works before migration 011.
+      ...(draft.code || bookLinkTouched ? { book_factor: draft.code ? num(bookFactor) || 1 : 1 } : {}),
       name: draft.name.trim(),
       minimum: num(minimum) ?? 0,
       order_qty: num(orderQty) ?? 1,
@@ -499,6 +519,18 @@ function ArticleEditor({
               {suppliers.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
             </Select>
           </L>
+
+          <BookLink
+            article={draft}
+            lager={lager}
+            factor={bookFactor}
+            onCode={(code) => {
+              set('code', code)
+              const row = lager.find((x) => x.code === code)
+              setBookFactor(String(row ? suggestFactor(draft, row.unit) : 1))
+            }}
+            onFactor={setBookFactor}
+          />
 
           {draft.kind === 'count' && (
             <div className="grid grid-cols-2 items-end gap-3">
@@ -740,6 +772,58 @@ function ArticleEditor({
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+/** "Artikal (knjigovodstvo)": which of the accountant's articles this one is, and the unit factor. */
+function BookLink({
+  article,
+  lager,
+  factor,
+  onCode,
+  onFactor,
+}: {
+  article: Article
+  lager: LagerArticle[]
+  factor: string
+  onCode: (code: string | null) => void
+  onFactor: (f: string) => void
+}) {
+  const row = lager.find((x) => x.code === article.code)
+  const ours = unitLabel(article)
+  const f = Number(factor.replace(',', '.')) || 1
+  const choices = lager.filter((x) => !isRetired(x) || x.code === article.code)
+  return (
+    <div className="space-y-2 rounded-xl bg-slate-50 p-3">
+      <L label="Artikal (knjigovodstvo)">
+        <Select value={article.code ?? ''} onChange={(e) => onCode(e.target.value || null)}>
+          <option value="">— nije povezano —</option>
+          {article.code && !row && <option value={article.code}>šifra {article.code}</option>}
+          {choices.map((x) => (
+            <option key={x.code} value={x.code}>{x.name} ({bookUnitLabel(x.unit)})</option>
+          ))}
+        </Select>
+      </L>
+      {lager.length === 0 && (
+        <p className="text-xs text-slate-400">Lista se puni kad se u Knjigovodstvo učita PDF lager liste.</p>
+      )}
+      {row && (
+        <>
+          <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
+            <span>1 {ours} =</span>
+            <div className="w-24">
+              <Input inputMode="decimal" value={factor} onChange={(e) => onFactor(e.target.value)} />
+            </div>
+            <span>{bookUnitLabel(row.unit)} kod knjigovođe</span>
+          </div>
+          <p className="text-xs text-slate-400">
+            Stanje {row.as_of.split('-').reverse().join('.')}.: {formatNum(row.stanje)} {bookUnitLabel(row.unit)}
+            {f !== 1 && ` = ${formatNum(row.stanje / f)} ${ours}`}. Više naših artikala može na isti (npr. ukusi
+            Cedevite) — stanje se tada poredi sa zbirom.
+          </p>
+        </>
+      )}
     </div>
   )
 }

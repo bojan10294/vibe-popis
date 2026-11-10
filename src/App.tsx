@@ -10,6 +10,7 @@ import { Counts } from './pages/admin/Counts'
 import { CountDetail } from './pages/admin/CountDetail'
 import { Articles } from './pages/admin/Articles'
 import { ImportPage } from './pages/admin/Import'
+import { Compare } from './pages/admin/Compare'
 import { Users } from './pages/admin/Users'
 import { OrderList } from './pages/admin/OrderList'
 import { Suppliers } from './pages/admin/Suppliers'
@@ -58,6 +59,7 @@ function AppRoutes() {
       <Route path="/admin/articles" element={<RequireRole role="admin"><Articles /></RequireRole>} />
       <Route path="/admin/suppliers" element={<RequireRole role="admin"><Suppliers /></RequireRole>} />
       <Route path="/admin/import" element={<RequireRole role="admin"><ImportPage /></RequireRole>} />
+      <Route path="/admin/compare" element={<RequireRole role="admin"><Compare /></RequireRole>} />
       <Route path="/admin/users" element={<RequireRole role="admin"><Users /></RequireRole>} />
       <Route path="/admin/orders" element={<RequireRole role="admin"><OrderList /></RequireRole>} />
       <Route path="/admin/orders/:countId" element={<RequireRole role="admin"><OrderList /></RequireRole>} />

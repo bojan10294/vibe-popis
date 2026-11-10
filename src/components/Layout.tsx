@@ -17,6 +17,7 @@ const adminNav: NavItem[] = [
   { to: '/admin/articles', label: 'Artikli' },
   { to: '/admin/suppliers', label: 'Dobavljači' },
   { to: '/admin/import', label: 'Knjigovodstvo' },
+  { to: '/admin/compare', label: 'Poređenje' },
   { to: '/admin/users', label: 'Zaposleni' },
 ]
 

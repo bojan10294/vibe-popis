@@ -80,11 +80,41 @@ export interface Article {
   count_weekday: number | null
   active: boolean
   sort_order: number
-  // --- Lager lista (book stock) — kept for the later accounting import ---
-  /** Accountant / POS code, only used to match lager-lista imports. */
-  code?: string
+  // --- Lager lista (book stock) ---
+  /** "Artikal (knjigovodstvo)": the accountant's article code (LagerArticle.code). */
+  code?: string | null
+  /**
+   * 1 of our counting unit = book_factor of the accountant's unit
+   * (1 bure = 20 l, 1 kesa espresa = 1 kg). Missing = 1.
+   */
+  book_factor?: number
   last_unit_price: number
+  /** Accountant's Stanje from the latest PDF, in our unit (stanje / book_factor). */
   book_stock: number | null
+}
+
+/** An article from the accountant's "Lager lista" PDF (latest values seen). */
+export interface LagerArticle {
+  code: string
+  name: string
+  /** KG, LIT, KOM or '' as printed. */
+  unit: string
+  stanje: number
+  cena: number
+  /** Date of the PDF these values come from. */
+  as_of: string
+}
+
+/** Stanje of one accountant article on one day. */
+export interface LagerStock {
+  date: string
+  code: string
+  name: string
+  unit: string
+  ulaz: number
+  izlaz: number
+  stanje: number
+  cena: number
 }
 
 export interface User {
