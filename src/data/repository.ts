@@ -12,6 +12,7 @@ import type {
   LagerStock,
   OrderLine,
   OrderStatus,
+  Payment,
   Role,
   Supplier,
   User,
@@ -168,6 +169,22 @@ export async function setCategoryDone(countId: string, categoryId: string, done:
 export async function finishCount(id: string): Promise<void> {
   await run(sb().from('counts').update({ status: 'finished', finished_at: new Date().toISOString() }).eq('id', id))
   await buildOrderList(id)
+  // Push "popis završen" to the admins' phones. Never blocks or fails the finish.
+  void notifyCountFinished(id).catch(() => {})
+}
+
+async function notifyCountFinished(countId: string): Promise<void> {
+  const { error } = await sb().functions.invoke('notify-count-finished', { body: { count_id: countId } })
+  if (error) throw error
+}
+
+/** Remembers this phone's push subscription for the logged-in admin. */
+export async function savePushSubscription(endpoint: string, p256dh: string, auth: string): Promise<void> {
+  await run(sb().rpc('app_save_push', { p_endpoint: endpoint, p_p256dh: p256dh, p_auth: auth }))
+}
+
+export async function deletePushSubscription(endpoint: string): Promise<void> {
+  await run(sb().rpc('app_delete_push', { p_endpoint: endpoint }))
 }
 
 /** Lines and order lines go with it (FK on delete cascade). */
@@ -349,6 +366,8 @@ export async function buildOrderList(countId: string): Promise<OrderLine[]> {
       for_date: prev?.for_date ?? new Date().toISOString().slice(0, 10),
       order_status: prev?.order_status ?? 'pending',
       note: noteOf(line.input) || null,
+      // Only when set by hand, so finishing a count never touches the column otherwise.
+      ...(prev?.payment ? { payment: prev.payment } : {}),
     })
   }
 
@@ -358,6 +377,15 @@ export async function buildOrderList(countId: string): Promise<OrderLine[]> {
 
 export async function updateOrderLine(line: OrderLine): Promise<void> {
   await run(sb().from('order_lines').update({ suggested_order_qty: line.suggested_order_qty }).eq('id', line.id))
+}
+
+/** null = back to automatic keš/račun. */
+export async function setOrderPayment(id: string, payment: Payment | null): Promise<void> {
+  await run(sb().from('order_lines').update({ payment }).eq('id', id))
+}
+
+export async function deleteOrderLine(id: string): Promise<void> {
+  await run(sb().from('order_lines').delete().eq('id', id))
 }
 
 export async function setOrderStatus(id: string, status: OrderStatus): Promise<void> {

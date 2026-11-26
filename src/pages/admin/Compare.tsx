@@ -18,6 +18,7 @@ export function Compare() {
   const [stock, setStock] = useState<LagerStock[]>([])
   const [lines, setLines] = useState<CountLine[]>([])
   const [filter, setFilter] = useState<Filter>('diff')
+  const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -76,9 +77,19 @@ export function Compare() {
     return s
   }, [rows])
 
-  const shown = rows.filter((r) =>
+  const words = fold(query).split(/\s+/).filter(Boolean)
+  const matches = (...texts: string[]) => {
+    if (!words.length) return true
+    const hay = fold(texts.join(' '))
+    return words.every((w) => hay.includes(w))
+  }
+  const rowMatches = (r: CompareRow) => matches(r.name, r.code, ...r.members.map((m) => m.name))
+
+  const found = words.length ? rows.filter(rowMatches) : rows
+  const shown = found.filter((r) =>
     filter === 'diff' ? r.counted != null && !r.ok : filter === 'notCounted' ? r.counted == null : filter === 'all',
   )
+  const unlinkedShown = unlinked.filter((s) => matches(s.name, s.code))
 
   if (loading) return <Spinner />
 
@@ -131,11 +142,32 @@ export function Compare() {
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className={`rounded-full px-3 py-1 text-sm font-medium ${filter === f ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'}`}
+                className={`rounded-full px-3 py-1 text-sm font-medium ${filter === f ? 'bg-slate-800 text-white dark:bg-brand-600' : 'bg-slate-100 text-slate-600'}`}
               >
                 {label}
               </button>
             ))}
+          </div>
+
+          <div className="relative">
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Pretraži artikal ili šifru…"
+              aria-label="Pretraga artikala"
+              className="w-full rounded-xl border border-slate-300 bg-surface py-2 pl-9 pr-9 text-slate-800 outline-none focus:border-brand-500"
+            />
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">🔍</span>
+            {query && (
+              <button
+                onClick={() => setQuery('')}
+                aria-label="Obriši pretragu"
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg px-2 py-0.5 text-slate-400 hover:text-slate-700"
+              >
+                ✕
+              </button>
+            )}
           </div>
 
           {filter === 'unlinked' ? (
@@ -145,7 +177,8 @@ export function Compare() {
                 <Link to="/admin/articles" className="font-medium text-brand-700">Artiklima</Link>.
               </p>
               <ul className="divide-y divide-slate-100">
-                {unlinked.map((s) => (
+                {unlinkedShown.length === 0 && <li className="py-3 text-center text-slate-400">Nema rezultata.</li>}
+                {unlinkedShown.map((s) => (
                   <li key={s.code} className="flex justify-between gap-3 py-1.5">
                     <span className="text-slate-700">{s.name}</span>
                     <span className="shrink-0 text-slate-500">{formatNum(s.stanje)} {bookUnitLabel(s.unit)}</span>
@@ -158,7 +191,19 @@ export function Compare() {
               {shown.map((r) => <CompareItem key={r.code} row={r} />)}
               {shown.length === 0 && (
                 <p className="py-6 text-center text-sm text-slate-400">
-                  {filter === 'diff' ? 'Nema razlika — sve se slaže.' : 'Nema artikala za prikaz.'}
+                  {words.length
+                    ? 'Nema rezultata u ovom prikazu.'
+                    : filter === 'diff'
+                      ? 'Nema razlika — sve se slaže.'
+                      : 'Nema artikala za prikaz.'}
+                  {words.length > 0 && filter !== 'all' && found.length > 0 && (
+                    <>
+                      {' '}
+                      <button onClick={() => setFilter('all')} className="font-medium text-brand-700 hover:underline">
+                        Pronađeno u „Sve” ({found.length}) →
+                      </button>
+                    </>
+                  )}
                 </p>
               )}
             </div>
@@ -223,6 +268,15 @@ function Stat({ label, value, tone }: { label: string; value: string; tone: stri
       <p className={`text-lg font-bold ${tone}`}>{value}</p>
     </div>
   )
+}
+
+/** Lowercase without Serbian diacritics, so "cokolada" finds "Čokolada". */
+function fold(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/đ/g, 'd')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
 }
 
 function fmtDate(iso: string): string {

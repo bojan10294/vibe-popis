@@ -217,7 +217,7 @@ export function ImportPage() {
                 key={f}
                 onClick={() => setFilter(f)}
                 className={`rounded-full px-3 py-1 text-sm font-medium ${
-                  filter === f ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'
+                  filter === f ? 'bg-slate-800 text-white dark:bg-brand-600' : 'bg-slate-100 text-slate-600'
                 }`}
               >
                 {label}

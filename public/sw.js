@@ -15,6 +15,39 @@ self.addEventListener('activate', (event) => {
   )
 })
 
+// Push notifications (e.g. "Popis završen"), sent by the notify-count-finished
+// Edge Function. Payload: { title, body, url, tag }.
+self.addEventListener('push', (event) => {
+  let data = {}
+  try {
+    data = event.data ? event.data.json() : {}
+  } catch {
+    data = { body: event.data ? event.data.text() : '' }
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title || 'Popis', {
+      body: data.body || '',
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      tag: data.tag,
+      data: { url: data.url || '/' },
+    }),
+  )
+})
+
+// Tap on the notification: reuse an open app window, otherwise open one.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const url = new URL(event.notification.data?.url || '/', self.location.origin).href
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((wins) => {
+      const win = wins.find((w) => new URL(w.url).origin === self.location.origin)
+      if (win) return win.focus().then((w) => (w && 'navigate' in w ? w.navigate(url) : undefined))
+      return self.clients.openWindow(url)
+    }),
+  )
+})
+
 self.addEventListener('fetch', (event) => {
   const req = event.request
   const url = new URL(req.url)

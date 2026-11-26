@@ -3,8 +3,58 @@ import { Link } from 'react-router-dom'
 import { listCounts, listOrdersForCount } from '../../data/repository'
 import type { Count } from '../../data/types'
 import { fmtDateTime } from '../../lib/format'
-import { Card, EmptyState, Spinner } from '../../components/ui'
+import { Button, Card, EmptyState, Spinner } from '../../components/ui'
+import { disablePush, enablePush, getPushState, type PushState } from '../../lib/push'
 import { CountRow } from './Counts'
+
+/** "Obaveštenja na ovom telefonu": push when a worker finishes a count. */
+function PushCard() {
+  const [state, setState] = useState<PushState | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    getPushState().then(setState, () => setState('unsupported'))
+  }, [])
+
+  const toggle = async () => {
+    setBusy(true)
+    try {
+      setState(state === 'on' ? await disablePush() : await enablePush())
+    } catch (e) {
+      alert(`Obaveštenja nisu uključena: ${e instanceof Error ? e.message : e}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (state === null) return null
+  const hint: Record<PushState, string> = {
+    on: 'Uključeno — stiže obaveštenje kad radnik završi popis.',
+    off: 'Dobijte obaveštenje na ovom telefonu kad radnik završi popis.',
+    denied: 'Obaveštenja su blokirana. Dozvolite ih u podešavanjima telefona za ovu aplikaciju.',
+    'needs-install': 'Na iPhone-u: Safari → Podeli → „Dodaj na početni ekran“, pa otvorite aplikaciju odatle.',
+    unsupported: 'Ovaj pregledač ne podržava obaveštenja (ili je otvorena razvojna verzija).',
+  }
+
+  return (
+    <Card className="flex items-center justify-between gap-3">
+      <div className="min-w-0">
+        <p className="font-semibold text-slate-800">🔔 Obaveštenja</p>
+        <p className="text-sm text-slate-500">{hint[state]}</p>
+      </div>
+      {(state === 'on' || state === 'off') && (
+        <Button
+          variant={state === 'on' ? 'secondary' : 'primary'}
+          onClick={toggle}
+          disabled={busy}
+          className="shrink-0 text-sm"
+        >
+          {state === 'on' ? 'Isključi' : 'Uključi'}
+        </Button>
+      )}
+    </Card>
+  )
+}
 
 export function Dashboard() {
   const [counts, setCounts] = useState<Count[]>([])
@@ -44,6 +94,8 @@ export function Dashboard() {
           </Card>
         </Link>
       )}
+
+      <PushCard />
 
       <section>
         <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">Popisi u toku</h2>

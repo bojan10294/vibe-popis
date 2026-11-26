@@ -197,4 +197,9 @@ export interface OrderLine {
   order_status: OrderStatus
   /** What the worker wrote is missing (articles with ask_note). */
   note: string | null
+  /** Set by hand; null/missing = automatic (see lib/payment.ts). */
+  payment?: Payment | null
 }
+
+/** 'invoice' = na račun (book and shelf go up), 'cash' = za keš (only the shelf). */
+export type Payment = 'cash' | 'invoice'

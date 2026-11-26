@@ -79,7 +79,8 @@ create table if not exists counts (
   status text not null check (status in ('in_progress', 'finished')),
   note text not null default '',
   done_categories jsonb not null default '[]'::jsonb,
-  book_stock_as_of_date date
+  book_stock_as_of_date date,
+  notified_at timestamptz  -- "popis završen" push went out
 );
 create index if not exists counts_status_idx on counts (status);
 
@@ -114,6 +115,8 @@ create table if not exists order_lines (
   for_date date not null,
   order_status text not null check (order_status in ('pending', 'ordered')),
   note text,
+  -- keš / račun set by hand; null = automatic (keš when in manjak vs. the book)
+  payment text check (payment in ('cash', 'invoice')),
   unique (count_id, article_id)
 );
 
@@ -233,10 +236,46 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
+-- Push notifications: phones that turned them on. Written via RPC, read by
+-- the notify-count-finished Edge Function.
+-- ---------------------------------------------------------------------------
+
+create table if not exists push_subscriptions (
+  endpoint text primary key,
+  user_id text not null references app_users (id) on delete cascade,
+  p256dh text not null,
+  auth text not null,
+  created_at timestamptz not null default now()
+);
+
+create or replace function app_session_user_id() returns text
+language sql stable security definer set search_path = public as $$
+  select s.user_id from app_sessions s
+  where s.token = coalesce(current_setting('request.headers', true)::json ->> 'x-session-token', '')
+    and s.expires_at > now()
+$$;
+
+create or replace function app_save_push(p_endpoint text, p_p256dh text, p_auth text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not app_is_admin() then raise exception 'not allowed'; end if;
+  insert into push_subscriptions (endpoint, user_id, p256dh, auth)
+  values (p_endpoint, app_session_user_id(), p_p256dh, p_auth)
+  on conflict (endpoint) do update
+    set user_id = excluded.user_id, p256dh = excluded.p256dh, auth = excluded.auth;
+end $$;
+
+create or replace function app_delete_push(p_endpoint text)
+returns void language sql security definer set search_path = public as $$
+  delete from push_subscriptions where endpoint = p_endpoint and user_id = app_session_user_id()
+$$;
+
+-- ---------------------------------------------------------------------------
 -- Row level security
 -- ---------------------------------------------------------------------------
 
 alter table app_users enable row level security;      -- no policies: only via RPC
+alter table push_subscriptions enable row level security;  -- no policies: only via RPC
 alter table app_sessions enable row level security;   -- no policies: only via RPC
 alter table categories enable row level security;
 alter table suppliers enable row level security;
@@ -273,9 +312,10 @@ end $$;
 
 grant usage on schema public to anon, authenticated;
 grant select, insert, update, delete on categories, suppliers, articles, counts, count_lines, order_lines, book_stock_imports, lager_articles, lager_stock to anon, authenticated;
-revoke all on app_users, app_sessions from anon, authenticated;
+revoke all on app_users, app_sessions, push_subscriptions from anon, authenticated;
 grant execute on function app_login(text, text), app_me(text), app_logout(text),
-  app_list_users(), app_save_user(text, text, text, text), app_delete_user(text)
+  app_list_users(), app_save_user(text, text, text, text), app_delete_user(text),
+  app_save_push(text, text, text), app_delete_push(text)
   to anon, authenticated;
 
 -- ---------------------------------------------------------------------------
