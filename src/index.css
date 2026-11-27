@@ -3,94 +3,282 @@
 /* Dark mode is a class on <html>, set by the theme switch (see lib/theme.ts). */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/*
+ * "Šank" — the café's ledger. Warm alabaster paper by day, obsidian bar top by
+ * night, one chartreuse accent for whatever you act on.
+ *
+ * Neutrals 50–300 are translucent ink, not solid greys: borders, dividers and
+ * tinted rows layer correctly on both the canvas and a card. 400–900 are the
+ * text ramp. Pages keep using the slate-* names; only the values change.
+ */
 @theme {
-  --font-sans: 'Inter', system-ui, 'Segoe UI', Roboto, sans-serif;
-  --color-brand-50: #f5f3ff;
-  --color-brand-100: #ede9fe;
-  --color-brand-200: #ddd6fe;
-  --color-brand-300: #c4b5fd;
-  --color-brand-400: #a78bfa;
-  --color-brand-500: #8b5cf6;
-  --color-brand-600: #7c3aed;
-  --color-brand-700: #6d28d9;
-  --color-brand-800: #5b21b6;
-  --color-brand-900: #4c1d95;
+  --font-sans: 'Plus Jakarta Sans Variable', ui-sans-serif, sans-serif;
+  --font-display: 'Bricolage Grotesque Variable', 'Plus Jakarta Sans Variable', ui-sans-serif, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
 
-  /* Page background and card/panel surface — the two tokens that flip. */
-  --color-canvas: #f4f5f9;
-  --color-surface: #ffffff;
+  --color-canvas: #ece8df;
+  --color-surface: #f7f5f0;
+  /* Solid "selected" fill (chips, active tab) and the text on it. */
+  --color-ink: #1c1d17;
+  --color-on-ink: #e2f77c;
+  /* Text on the chartreuse accent, in both themes. */
+  --color-on-brand: #171a07;
+
+  --color-slate-50: rgb(40 36 20 / 0.035);
+  --color-slate-100: rgb(40 36 20 / 0.065);
+  --color-slate-200: rgb(40 36 20 / 0.11);
+  --color-slate-300: rgb(40 36 20 / 0.2);
+  --color-slate-400: #8f8b7e;
+  --color-slate-500: #6d695d;
+  --color-slate-600: #545146;
+  --color-slate-700: #3d3b33;
+  --color-slate-800: #29281f;
+  --color-slate-900: #18180f;
+
+  /* Chartreuse. 600 is the button fill; 700–900 are legible text shades. */
+  --color-brand-50: #eef5cf;
+  --color-brand-100: #e4f0b0;
+  --color-brand-200: #cfe47c;
+  --color-brand-300: #b7d447;
+  --color-brand-400: #c6ec36;
+  --color-brand-500: #9cc417;
+  --color-brand-600: #d4f54a;
+  --color-brand-700: #4b6200;
+  --color-brand-800: #394b00;
+  --color-brand-900: #263200;
+
+  /* Success: a cooler emerald, so it never reads as the accent. */
+  --color-green-50: #e2f1e8;
+  --color-green-100: #cde8d9;
+  --color-green-200: #a5d4bb;
+  --color-green-300: #74bb97;
+  --color-green-500: #1fa06c;
+  --color-green-600: #11865a;
+  --color-green-700: #0a6a47;
+  --color-green-800: #075337;
+  --color-green-900: #053c28;
+
+  --color-red-600: #d4372a;
+  --color-amber-100: #f6e6bf;
+
+  --radius-xl: 0.875rem;
+  --radius-2xl: 1.25rem;
+  --radius-3xl: 1.75rem;
+
+  /* Soft elevation instead of stacked drop shadows. */
+  --shadow-sm: inset 0 1px 0 rgb(255 255 255 / 0.55), 0 1px 2px rgb(30 26 10 / 0.04), 0 10px 28px -18px rgb(30 26 10 / 0.22);
+  --shadow: var(--shadow-sm);
+  --shadow-lg: inset 0 1px 0 rgb(255 255 255 / 0.5), 0 24px 48px -24px rgb(30 26 10 / 0.35);
+
+  --animate-rise: rise 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(12px) scale(0.985);
+      filter: blur(3px);
+    }
+  }
 }
 
-/*
- * Dark theme: instead of adding dark: classes everywhere, the palette itself
- * is remapped. Neutrals (slate) invert; color tints (50–300) become deep
- * tints and dark text shades (700–900) become light. 400–600 stay as they
- * are, so solid buttons (bg-*-600 + white text) keep their contrast.
- */
 .dark {
   color-scheme: dark;
-  --color-canvas: #0c0f17;
-  --color-surface: #151a26;
+  --color-canvas: #0d0e0b;
+  --color-surface: #161713;
+  --color-ink: #d4f54a;
+  --color-on-ink: #141608;
 
-  --color-slate-50: #1b2130;
-  --color-slate-100: #222939;
-  --color-slate-200: #2b3345;
-  --color-slate-300: #3a4357;
-  --color-slate-400: #7c869b;
-  --color-slate-500: #98a1b4;
-  --color-slate-600: #b6becd;
-  --color-slate-700: #d2d8e2;
-  --color-slate-800: #e7ebf1;
-  --color-slate-900: #f3f5f9;
+  --color-slate-50: rgb(250 250 235 / 0.035);
+  --color-slate-100: rgb(250 250 235 / 0.06);
+  --color-slate-200: rgb(250 250 235 / 0.095);
+  --color-slate-300: rgb(250 250 235 / 0.17);
+  --color-slate-400: #7d7f72;
+  --color-slate-500: #9a9c8f;
+  --color-slate-600: #b8baad;
+  --color-slate-700: #d2d4c7;
+  --color-slate-800: #e7e8de;
+  --color-slate-900: #f4f4ec;
 
-  --color-brand-50: #1d1734;
-  --color-brand-100: #281f4a;
-  --color-brand-200: #3b2d6b;
-  --color-brand-300: #5a46a0;
-  --color-brand-700: #c4b5fd;
-  --color-brand-800: #ddd6fe;
-  --color-brand-900: #ede9fe;
+  --color-brand-50: rgb(212 245 74 / 0.07);
+  --color-brand-100: rgb(212 245 74 / 0.12);
+  --color-brand-200: rgb(212 245 74 / 0.22);
+  --color-brand-300: rgb(212 245 74 / 0.38);
+  --color-brand-500: #c2ea33;
+  --color-brand-700: #d4f54a;
+  --color-brand-800: #e3f98a;
+  --color-brand-900: #f1fcc8;
 
-  --color-green-50: #0f251a;
-  --color-green-100: #133220;
-  --color-green-200: #1c4a30;
-  --color-green-300: #2a6744;
-  --color-green-700: #7ee2a8;
-  --color-green-800: #a7f0c4;
-  --color-green-900: #d1fae0;
+  --color-green-50: #0e2219;
+  --color-green-100: #122d21;
+  --color-green-200: #19432f;
+  --color-green-300: #245f43;
+  --color-green-600: #18a06b;
+  --color-green-700: #6fdcaa;
+  --color-green-800: #a3ecc9;
+  --color-green-900: #d3f8e6;
 
-  --color-red-50: #2b1416;
-  --color-red-100: #3a1a1d;
-  --color-red-200: #5a2428;
-  --color-red-300: #7f2f35;
-  --color-red-700: #fca5a5;
-  --color-red-800: #fecaca;
-  --color-red-900: #fee2e2;
+  --color-red-50: #2a1412;
+  --color-red-100: #391a17;
+  --color-red-200: #57241f;
+  --color-red-300: #7c3029;
+  --color-red-700: #ffa79c;
+  --color-red-800: #ffcbc3;
+  --color-red-900: #ffe4df;
 
-  --color-amber-50: #29200e;
-  --color-amber-100: #382a10;
-  --color-amber-200: #594214;
-  --color-amber-300: #7a5a17;
-  --color-amber-700: #fcd34d;
-  --color-amber-800: #fde68a;
-  --color-amber-900: #fef3c7;
+  --color-amber-50: #282010;
+  --color-amber-100: #372b12;
+  --color-amber-200: #574316;
+  --color-amber-300: #7a5c19;
+  --color-amber-700: #f9cf5a;
+  --color-amber-800: #fde293;
+  --color-amber-900: #fef1c8;
+
+  --shadow-sm: inset 0 1px 0 rgb(255 255 255 / 0.045), 0 1px 2px rgb(0 0 0 / 0.3), 0 14px 32px -20px rgb(0 0 0 / 0.7);
+  --shadow-lg: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 28px 56px -24px rgb(0 0 0 / 0.8);
 }
 
-html,
-body,
-#root {
-  height: 100%;
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: 'ss01', 'cv11';
+    background-color: var(--color-canvas);
+    color: var(--color-slate-800);
+    transition: background-color 0.3s ease;
+  }
+
+  /* Atmosphere: a faint dot grid, a chartreuse glow up top, a warm one below. */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      radial-gradient(60rem 30rem at 100% -10%, rgb(212 245 74 / 0.28), transparent 60%),
+      radial-gradient(50rem 30rem at -10% 110%, rgb(232 160 90 / 0.14), transparent 60%),
+      radial-gradient(circle at 1px 1px, rgb(40 36 20 / 0.09) 1px, transparent 0) 0 0 / 22px 22px;
+    -webkit-mask-image: linear-gradient(to bottom, black, rgb(0 0 0 / 0.55));
+    mask-image: linear-gradient(to bottom, black, rgb(0 0 0 / 0.55));
+  }
+  .dark body::before {
+    background:
+      radial-gradient(55rem 28rem at 100% -10%, rgb(212 245 74 / 0.11), transparent 60%),
+      radial-gradient(50rem 30rem at -10% 110%, rgb(232 140 70 / 0.07), transparent 60%),
+      radial-gradient(circle at 1px 1px, rgb(250 250 235 / 0.06) 1px, transparent 0) 0 0 / 22px 22px;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    font-optical-sizing: auto;
+  }
+  h1 {
+    letter-spacing: -0.035em;
+  }
+
+  ::selection {
+    background: #d4f54a;
+    color: #171a07;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-brand-500);
+    outline-offset: 2px;
+  }
+
+  input[type='checkbox'],
+  input[type='radio'] {
+    accent-color: var(--color-brand-500);
+  }
+
+  /* Tactile by default: every button eases and presses in. Utilities can still override. */
+  button,
+  a {
+    -webkit-tap-highlight-color: transparent;
+    transition-property: color, background-color, border-color, box-shadow, transform, opacity, filter;
+    transition-duration: 0.18s;
+    transition-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  button:not(:disabled):active {
+    transform: scale(0.97);
+  }
+
+  @media (hover: hover) {
+    /* Bordered links and buttons light up toward the accent. */
+    a[class*='border']:hover,
+    button[class*='border']:not(:disabled):hover {
+      border-color: color-mix(in oklab, var(--color-brand-500) 55%, transparent);
+    }
+  }
 }
 
-body {
-  margin: 0;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  background-color: var(--color-canvas);
-  color: var(--color-slate-800);
-  transition: background-color 0.2s ease;
+@layer components {
+  /* Page entrance: each block on the page rises in, one after another. */
+  .stagger > * > * {
+    animation: var(--animate-rise);
+  }
+  .stagger > * > :nth-child(1) { animation-delay: 0.02s; }
+  .stagger > * > :nth-child(2) { animation-delay: 0.07s; }
+  .stagger > * > :nth-child(3) { animation-delay: 0.12s; }
+  .stagger > * > :nth-child(4) { animation-delay: 0.17s; }
+  .stagger > * > :nth-child(5) { animation-delay: 0.22s; }
+  .stagger > * > :nth-child(6) { animation-delay: 0.27s; }
+  .stagger > * > :nth-child(7) { animation-delay: 0.32s; }
+  .stagger > * > :nth-child(n + 8) { animation-delay: 0.36s; }
+
+  /* Interactive cards: lift a pixel and glow at the edge. */
+  .lift {
+    transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1), border-color 0.22s, box-shadow 0.22s;
+  }
+  @media (hover: hover) {
+    .lift:hover,
+    a:hover > .lift {
+      transform: translateY(-2px);
+      border-color: color-mix(in oklab, var(--color-brand-500) 55%, transparent);
+      box-shadow: var(--shadow-sm), 0 0 0 4px color-mix(in oklab, var(--color-brand-500) 14%, transparent);
+    }
+  }
+
+  /* The obsidian tile: dark in both themes, dot grid, chartreuse glow. */
+  .tile-obsidian {
+    color: #f1f1e8;
+    background:
+      radial-gradient(22rem 14rem at 110% -20%, rgb(212 245 74 / 0.32), transparent 65%),
+      radial-gradient(circle at 1px 1px, rgb(255 255 255 / 0.08) 1px, transparent 0) 0 0 / 16px 16px,
+      #191a15;
+    border: 1px solid rgb(255 255 255 / 0.08);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08), 0 24px 48px -28px rgb(20 20 5 / 0.7);
+  }
+
+  /* Numbers, dates, quantities, tags. */
+  .num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
 }
 
-button {
-  -webkit-tap-highlight-color: transparent;
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
+    transition-duration: 0.01ms !important;
+  }
 }

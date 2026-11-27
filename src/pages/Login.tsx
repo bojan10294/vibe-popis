@@ -28,41 +28,48 @@ export function Login() {
   }
 
   return (
-    <div className="relative mx-auto flex min-h-full max-w-sm flex-col items-center justify-center px-4 py-10">
-      <div className="absolute right-4 top-4">
+    <div className="relative mx-auto flex min-h-full max-w-sm flex-col justify-center px-5 py-10">
+      <div className="absolute right-5 top-5">
         <ThemeSwitch theme={theme} onToggle={toggleTheme} />
       </div>
-      <div className="mb-8 flex flex-col items-center text-center">
-        <AppLogo size={64} />
-        <h1 className="mt-4 text-3xl font-extrabold tracking-tight text-slate-900">Popis</h1>
-        <p className="mt-1 text-sm text-slate-500">Popis robe i lista nabavke</p>
+      <div className="stagger">
+        <div>
+          <div className="mb-8">
+            <AppLogo size={56} />
+            <p className="eyebrow mt-6 text-slate-500">Inventar kafića</p>
+            <h1 className="mt-2 font-display text-6xl font-extrabold leading-[0.9] tracking-[-0.05em] text-slate-900">
+              Popis<span className="text-brand-500">.</span>
+            </h1>
+            <p className="mt-3 max-w-[16rem] text-base text-slate-500">Brojanje robe, fakture i lista nabavke na jednom mestu.</p>
+          </div>
+          <Card className="w-full p-5">
+            <form onSubmit={onSubmit} className="space-y-4">
+              <Field label="Ime">
+                <Input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Vaše ime"
+                  autoComplete="username"
+                />
+              </Field>
+              <Field label="PIN">
+                <Input
+                  type="password"
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value)}
+                  placeholder="••••"
+                  autoComplete="current-password"
+                  inputMode="numeric"
+                />
+              </Field>
+              {error && <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+              <Button type="submit" className="w-full py-3" disabled={busy}>
+                {busy ? 'Provera...' : 'Prijavi se →'}
+              </Button>
+            </form>
+          </Card>
+        </div>
       </div>
-      <Card className="w-full p-5">
-        <form onSubmit={onSubmit} className="space-y-4">
-          <Field label="Ime">
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Vaše ime"
-              autoComplete="username"
-            />
-          </Field>
-          <Field label="PIN">
-            <Input
-              type="password"
-              value={pin}
-              onChange={(e) => setPin(e.target.value)}
-              placeholder="••••"
-              autoComplete="current-password"
-              inputMode="numeric"
-            />
-          </Field>
-          {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-          <Button type="submit" className="w-full py-3" disabled={busy}>
-            {busy ? 'Provera...' : 'Prijavi se'}
-          </Button>
-        </form>
-      </Card>
     </div>
   )
 }

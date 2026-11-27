@@ -167,14 +167,14 @@ export function ImportPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Knjigovodstvo (lager lista)</h1>
+      <h1 className="text-3xl font-extrabold text-slate-900">Knjigovodstvo (lager lista)</h1>
 
       <Card className="space-y-3">
         <p className="text-sm text-slate-600">
           Učitaj PDF lager liste od knjigovođe. Aplikacija pročita sve artikle i njihovo <strong>Stanje</strong>, i
           poveže ih sa našim artiklima. Veze se pamte — sledeći put samo učitaš novi PDF.
         </p>
-        <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 font-semibold text-white shadow-sm hover:bg-brand-700">
+        <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-black/10 bg-brand-600 px-4 py-2.5 font-semibold text-on-brand shadow-sm hover:-translate-y-px hover:brightness-105">
           {reading ? 'Čitam PDF...' : 'Izaberi PDF'}
           <input
             type="file"
@@ -219,7 +219,7 @@ export function ImportPage() {
                 key={f}
                 onClick={() => setFilter(f)}
                 className={`rounded-full px-3 py-1 text-sm font-medium ${
-                  filter === f ? 'bg-slate-800 text-white dark:bg-brand-600' : 'bg-slate-100 text-slate-600'
+                  filter === f ? 'bg-ink text-on-ink' : 'bg-slate-100 text-slate-600'
                 }`}
               >
                 {label}
@@ -229,7 +229,7 @@ export function ImportPage() {
 
           {sections.map((s) => (
             <section key={s.id} className="space-y-2">
-              <h2 className="border-b border-slate-200 pb-1 text-sm font-bold uppercase tracking-wide text-slate-600">
+              <h2 className="border-b border-slate-200 pb-1 eyebrow text-slate-600">
                 {s.name} <span className="font-normal text-slate-400">({s.items.length})</span>
               </h2>
               <div className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-surface">

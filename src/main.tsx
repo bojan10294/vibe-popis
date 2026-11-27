@@ -1,5 +1,9 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+// Fonts ship with the app (works offline, no Google request).
+import '@fontsource-variable/bricolage-grotesque/opsz.css'
+import '@fontsource-variable/plus-jakarta-sans'
+import '@fontsource-variable/jetbrains-mono'
 import './index.css'
 import App from './App.tsx'
 

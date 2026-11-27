@@ -59,7 +59,7 @@ export function Deliveries() {
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-2">
-        <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Fakture</h1>
+        <h1 className="text-3xl font-extrabold text-slate-900">Fakture</h1>
         {list.length > 0 && (
           <button
             onClick={exportAll}
@@ -132,10 +132,10 @@ export function DeliveryDetail() {
   return (
     <div className="space-y-4">
       <div>
-        <Link to="/admin/deliveries" className="text-sm font-medium text-brand-600 hover:underline">
+        <Link to="/admin/deliveries" className="text-sm font-medium text-brand-700 hover:underline">
           ← Sve fakture
         </Link>
-        <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900">
+        <h1 className="mt-1 text-3xl font-extrabold text-slate-900">
           {delivery.supplier_name ?? 'Bez dobavljača'}
         </h1>
         <p className="text-sm text-slate-500">
@@ -148,7 +148,7 @@ export function DeliveryDetail() {
 
       {delivery.note && (
         <Card className="border-amber-200 bg-amber-50">
-          <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Napomena</p>
+          <p className="eyebrow text-amber-700">Napomena</p>
           <p className="text-amber-900">{delivery.note}</p>
         </Card>
       )}
@@ -222,7 +222,7 @@ function ArrivalCheck({ check }: { check: DeliveryCheck }) {
           : 'nije naručeno'
   return (
     <section className="space-y-1.5">
-      <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+      <h2 className="px-1 eyebrow text-slate-400">
         Naručeno vs stiglo{' '}
         <Link to={`/admin/orders/${check.count_id}`} className="normal-case text-brand-700 hover:underline">
           (lista od {fmtDateTime(check.count_datetime)})
@@ -252,7 +252,7 @@ function LineSection({ title, lines, tone }: { title: string; lines: DeliveryLin
   if (lines.length === 0) return null
   return (
     <section className="space-y-1.5">
-      <h2 className={`px-1 text-xs font-semibold uppercase tracking-wide ${tone === 'red' ? 'text-red-500' : 'text-slate-400'}`}>
+      <h2 className={`px-1 eyebrow ${tone === 'red' ? 'text-red-500' : 'text-slate-400'}`}>
         {title} ({lines.length})
       </h2>
       <div className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-surface">

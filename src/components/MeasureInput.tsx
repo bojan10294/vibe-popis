@@ -43,7 +43,7 @@ function NumberField({
           inputMode={decimal ? 'decimal' : 'numeric'}
           autoFocus={autoFocus}
           placeholder="0"
-          className="w-full rounded-xl border-2 border-slate-300 bg-surface px-4 py-3 text-right text-2xl font-semibold outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+          className="num w-full rounded-xl border-2 border-slate-300 bg-surface px-4 py-3 text-right text-2xl font-semibold outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/20"
         />
         {suffix && <span className="w-16 shrink-0 text-base text-slate-500">{suffix}</span>}
       </div>

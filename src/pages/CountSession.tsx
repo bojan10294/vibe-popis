@@ -272,7 +272,7 @@ export function CountSession() {
           ) : (
             <button
               onClick={() => setShowList((s) => !s)}
-              className="flex items-center gap-1.5 rounded-full bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition active:scale-95"
+              className="flex items-center gap-1.5 rounded-full border border-black/10 bg-brand-600 px-3 py-1.5 text-sm font-semibold text-on-brand shadow-sm hover:-translate-y-px"
             >
               ☰ {view.index + 1} / {group.articles.length}
               <span className="text-xs">{showList ? '▲' : '▼'}</span>
@@ -303,7 +303,7 @@ export function CountSession() {
                     </span>
                     <span className={`truncate ${current ? 'font-semibold text-brand-700' : 'text-slate-800'}`}>{a.name}</span>
                   </span>
-                  <span className="shrink-0 text-right text-sm text-slate-500">
+                  <span className="num shrink-0 text-right text-sm text-slate-500">
                     {line ? describeInput(a, line.input, line.counted) : '—'}
                   </span>
                 </button>
@@ -313,17 +313,17 @@ export function CountSession() {
         )}
 
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{group.name}</p>
+          <p className="eyebrow text-slate-400">{group.name}</p>
           <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200">
             <div
-              className="h-full bg-brand-500 transition-all"
+              className="h-full rounded-full bg-brand-500 shadow-[0_0_12px_rgb(212_245_74/0.6)] transition-all duration-500"
               style={{ width: `${(filled / group.articles.length) * 100}%` }}
             />
           </div>
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-surface p-5 shadow-sm">
-          <h1 className="mb-5 text-2xl font-bold text-slate-800">{article.name}</h1>
+          <h1 className="mb-5 text-3xl font-extrabold text-slate-900">{article.name}</h1>
           <MeasureInput
             key={article.id}
             article={article}
@@ -359,7 +359,7 @@ export function CountSession() {
       <div className="space-y-4 pb-28">
         {offlineBanner}
         <div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Proveri popis</h1>
+          <h1 className="text-3xl font-extrabold text-slate-900">Proveri popis</h1>
           <p className="text-sm text-slate-500">Dodirni stavku da je ispraviš.</p>
         </div>
         {finishFailed && (
@@ -384,7 +384,7 @@ export function CountSession() {
         )}
         {groups.map((g) => (
           <section key={g.id} className="space-y-1.5">
-            <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">{g.name}</h2>
+            <h2 className="px-1 eyebrow text-slate-400">{g.name}</h2>
             <div className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-surface">
               {g.articles.map((a, i) => {
                 const line = lines.get(a.id)
@@ -431,10 +431,10 @@ export function CountSession() {
       {offlineBanner}
       <div className="flex items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Popis</h1>
+          <h1 className="text-3xl font-extrabold text-slate-900">Popis</h1>
           <p className="text-sm text-slate-500">Izaberi kategoriju, redom koji ti odgovara.</p>
         </div>
-        <span className="shrink-0 rounded-full bg-surface px-3 py-1 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200">
+        <span className="num shrink-0 rounded-full border border-slate-200 bg-surface px-3 py-1 text-sm font-semibold text-slate-700 shadow-sm">
           {doneCount} / {groups.length}
         </span>
       </div>
@@ -448,14 +448,14 @@ export function CountSession() {
             <button
               key={g.id}
               onClick={() => openGroup(g)}
-              className={`w-full rounded-2xl border p-4 text-left shadow-sm transition active:scale-[0.99] ${
+              className={`lift w-full rounded-2xl border p-4 text-left shadow-sm ${
                 isDone ? 'border-green-200 bg-green-50' : started ? 'border-amber-200 bg-surface' : 'border-slate-200/80 bg-surface'
               }`}
             >
               <div className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3">
                   <span
-                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-bold ${
+                    className={`num flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-bold ${
                       isDone ? 'bg-green-600 text-white' : started ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-500'
                     }`}
                   >

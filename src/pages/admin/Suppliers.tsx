@@ -68,7 +68,7 @@ export function Suppliers() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Dobavljači ({suppliers.length})</h1>
+          <h1 className="text-3xl font-extrabold text-slate-900">Dobavljači ({suppliers.length})</h1>
           <p className="text-sm text-slate-500">Lista nabavke je podeljena po dobavljačima, ovim redom.</p>
         </div>
         <Button onClick={() => setForm({ id: null, name: '', phone: '' })} className="text-sm">+ Dobavljač</Button>
