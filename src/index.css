@@ -5,7 +5,7 @@
 
 /*
  * "Šank" — the café's ledger. Warm alabaster paper by day, obsidian bar top by
- * night, one chartreuse accent for whatever you act on.
+ * night, one cobalt accent for whatever you act on.
  *
  * Neutrals 50–300 are translucent ink, not solid greys: borders, dividers and
  * tinted rows layer correctly on both the canvas and a card. 400–900 are the
@@ -20,9 +20,9 @@
   --color-surface: #f7f5f0;
   /* Solid "selected" fill (chips, active tab) and the text on it. */
   --color-ink: #1c1d17;
-  --color-on-ink: #e2f77c;
-  /* Text on the chartreuse accent, in both themes. */
-  --color-on-brand: #171a07;
+  --color-on-ink: #ffffff;
+  /* Text on the cobalt accent, in both themes. */
+  --color-on-brand: #ffffff;
 
   --color-slate-50: rgb(40 36 20 / 0.035);
   --color-slate-100: rgb(40 36 20 / 0.065);
@@ -35,17 +35,17 @@
   --color-slate-800: #29281f;
   --color-slate-900: #18180f;
 
-  /* Chartreuse. 600 is the button fill; 700–900 are legible text shades. */
-  --color-brand-50: #eef5cf;
-  --color-brand-100: #e4f0b0;
-  --color-brand-200: #cfe47c;
-  --color-brand-300: #b7d447;
-  --color-brand-400: #c6ec36;
-  --color-brand-500: #9cc417;
-  --color-brand-600: #d4f54a;
-  --color-brand-700: #4b6200;
-  --color-brand-800: #394b00;
-  --color-brand-900: #263200;
+  /* Cobalt. 600 is the button fill; 700–900 are text shades. */
+  --color-brand-50: #eef1ff;
+  --color-brand-100: #dfe5ff;
+  --color-brand-200: #bfcbff;
+  --color-brand-300: #94a7ff;
+  --color-brand-400: #5f7cff;
+  --color-brand-500: #3d5cff;
+  --color-brand-600: #2f4ef5;
+  --color-brand-700: #2338c4;
+  --color-brand-800: #1d2e96;
+  --color-brand-900: #172469;
 
   /* Success: a cooler emerald, so it never reads as the accent. */
   --color-green-50: #e2f1e8;
@@ -84,8 +84,8 @@
   color-scheme: dark;
   --color-canvas: #0d0e0b;
   --color-surface: #161713;
-  --color-ink: #d4f54a;
-  --color-on-ink: #141608;
+  --color-ink: #4a6aff;
+  --color-on-ink: #ffffff;
 
   --color-slate-50: rgb(250 250 235 / 0.035);
   --color-slate-100: rgb(250 250 235 / 0.06);
@@ -98,14 +98,15 @@
   --color-slate-800: #e7e8de;
   --color-slate-900: #f4f4ec;
 
-  --color-brand-50: rgb(212 245 74 / 0.07);
-  --color-brand-100: rgb(212 245 74 / 0.12);
-  --color-brand-200: rgb(212 245 74 / 0.22);
-  --color-brand-300: rgb(212 245 74 / 0.38);
-  --color-brand-500: #c2ea33;
-  --color-brand-700: #d4f54a;
-  --color-brand-800: #e3f98a;
-  --color-brand-900: #f1fcc8;
+  --color-brand-50: rgb(90 120 255 / 0.09);
+  --color-brand-100: rgb(90 120 255 / 0.15);
+  --color-brand-200: rgb(90 120 255 / 0.26);
+  --color-brand-300: rgb(90 120 255 / 0.42);
+  --color-brand-500: #6b86ff;
+  --color-brand-600: #4a6aff;
+  --color-brand-700: #a3b5ff;
+  --color-brand-800: #c6d1ff;
+  --color-brand-900: #e3e8ff;
 
   --color-green-50: #0e2219;
   --color-green-100: #122d21;
@@ -153,7 +154,7 @@
     transition: background-color 0.3s ease;
   }
 
-  /* Atmosphere: a faint dot grid, a chartreuse glow up top, a warm one below. */
+  /* Atmosphere: a faint dot grid, a cobalt glow up top, a warm one below. */
   body::before {
     content: '';
     position: fixed;
@@ -161,7 +162,7 @@
     z-index: -1;
     pointer-events: none;
     background:
-      radial-gradient(60rem 30rem at 100% -10%, rgb(212 245 74 / 0.28), transparent 60%),
+      radial-gradient(60rem 30rem at 100% -10%, rgb(61 92 255 / 0.2), transparent 60%),
       radial-gradient(50rem 30rem at -10% 110%, rgb(232 160 90 / 0.14), transparent 60%),
       radial-gradient(circle at 1px 1px, rgb(40 36 20 / 0.09) 1px, transparent 0) 0 0 / 22px 22px;
     -webkit-mask-image: linear-gradient(to bottom, black, rgb(0 0 0 / 0.55));
@@ -169,7 +170,7 @@
   }
   .dark body::before {
     background:
-      radial-gradient(55rem 28rem at 100% -10%, rgb(212 245 74 / 0.11), transparent 60%),
+      radial-gradient(55rem 28rem at 100% -10%, rgb(80 110 255 / 0.16), transparent 60%),
       radial-gradient(50rem 30rem at -10% 110%, rgb(232 140 70 / 0.07), transparent 60%),
       radial-gradient(circle at 1px 1px, rgb(250 250 235 / 0.06) 1px, transparent 0) 0 0 / 22px 22px;
   }
@@ -185,8 +186,8 @@
   }
 
   ::selection {
-    background: #d4f54a;
-    color: #171a07;
+    background: #3d5cff;
+    color: #ffffff;
   }
 
   :focus-visible {
@@ -247,11 +248,11 @@
     }
   }
 
-  /* The obsidian tile: dark in both themes, dot grid, chartreuse glow. */
+  /* The obsidian tile: dark in both themes, dot grid, cobalt glow. */
   .tile-obsidian {
     color: #f1f1e8;
     background:
-      radial-gradient(22rem 14rem at 110% -20%, rgb(212 245 74 / 0.32), transparent 65%),
+      radial-gradient(22rem 14rem at 110% -20%, rgb(90 120 255 / 0.45), transparent 65%),
       radial-gradient(circle at 1px 1px, rgb(255 255 255 / 0.08) 1px, transparent 0) 0 0 / 16px 16px,
       #191a15;
     border: 1px solid rgb(255 255 255 / 0.08);

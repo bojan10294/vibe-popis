@@ -104,13 +104,13 @@ export function StaffHome() {
         >
           <div className="flex items-start justify-between gap-3">
             <p className="eyebrow text-white/55">{activeId ? 'Nezavršen popis' : 'Za brojanje danas'}</p>
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-600 text-xl font-bold text-on-brand shadow-[0_0_0_6px_rgb(212_245_74/0.12)] transition-transform duration-300 group-hover:rotate-[-8deg] group-hover:scale-110">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-600 text-xl font-bold text-on-brand shadow-[0_0_0_6px_rgb(90_120_255/0.22)] transition-transform duration-300 group-hover:rotate-[-8deg] group-hover:scale-110">
               {activeId ? '→' : '+'}
             </span>
           </div>
           <div>
             {!activeId && (
-              <p className="num text-6xl font-semibold leading-none tracking-[-0.06em] text-[#d4f54a]">
+              <p className="num text-6xl font-semibold leading-none tracking-[-0.06em] text-[#a3b5ff]">
                 {articleCount}
                 <span className="ml-2 align-top text-sm font-medium tracking-normal text-white/50">artikala</span>
               </p>

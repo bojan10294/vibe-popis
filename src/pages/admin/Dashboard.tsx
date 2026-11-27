@@ -127,7 +127,7 @@ export function Dashboard() {
               </span>
             </div>
             <div>
-              <p className="num text-6xl font-semibold leading-none tracking-[-0.06em] text-[#d4f54a]">{orderLineCount ?? 0}</p>
+              <p className="num text-6xl font-semibold leading-none tracking-[-0.06em] text-[#a3b5ff]">{orderLineCount ?? 0}</p>
               <p className="mt-2 font-display text-xl font-bold tracking-tight">artikala za nabavku</p>
               <p className="num mt-1 text-xs text-white/50">
                 popis {fmtDateTime(last.datetime)} · {last.user_name}
