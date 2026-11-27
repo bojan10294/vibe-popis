@@ -3,6 +3,7 @@
 //   { delivery_id }  "faktura unesena" — right after a worker confirms a delivery
 //                    (with what was ordered but didn't arrive)
 //   { article_request_id }  "novi artikal" — a worker asked for an article that isn't on the list
+//   { test: true }   "probno obaveštenje" — admin only, to their own phones
 //
 // Deploy:  supabase functions deploy notify-count-finished --no-verify-jwt
 // Secrets: supabase secrets set --env-file supabase/.env.push.local
@@ -32,7 +33,16 @@ interface Payload {
 
 const plural = (n: number) => (n === 1 ? 'artikal' : 'artikala')
 
+// Any crash still answers with CORS headers, so the app sees the real error.
 Deno.serve(async (req) => {
+  try {
+    return await handle(req)
+  } catch (e) {
+    return json({ error: e instanceof Error ? e.message : String(e) }, 500)
+  }
+})
+
+async function handle(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405)
 
@@ -41,7 +51,8 @@ Deno.serve(async (req) => {
   const countId = typeof body?.count_id === 'string' ? body.count_id : null
   const deliveryId = typeof body?.delivery_id === 'string' ? body.delivery_id : null
   const requestId = typeof body?.article_request_id === 'string' ? body.article_request_id : null
-  if (!token || (!countId && !deliveryId && !requestId)) return json({ error: 'bad request' }, 400)
+  const test = body?.test === true
+  if (!token || (!countId && !deliveryId && !requestId && !test)) return json({ error: 'bad request' }, 400)
 
   const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
     auth: { persistSession: false },
@@ -55,6 +66,20 @@ Deno.serve(async (req) => {
     .maybeSingle()
   if (!session) return json({ error: 'not allowed' }, 401)
 
+  // "Pošalji probno": an admin checks their own phones; goes to no one else.
+  if (test) {
+    const { data: me } = await db.from('app_users').select('role').eq('id', session.user_id).maybeSingle()
+    if (me?.role !== 'admin') return json({ error: 'not allowed' }, 403)
+    return json(
+      await sendToAdmins(
+        db,
+        req,
+        { title: '🔔 Probno obaveštenje', body: 'Obaveštenja rade na ovom telefonu.', url: '/admin', tag: 'test' },
+        session.user_id,
+      ),
+    )
+  }
+
   const built = countId
     ? await countPayload(db, countId)
     : deliveryId
@@ -64,7 +89,7 @@ Deno.serve(async (req) => {
   if (!built.payload) return json({ sent: 0, reason: 'already sent or not finished' })
 
   return json(await sendToAdmins(db, req, built.payload))
-})
+}
 
 type Built = { payload: Payload | null } | { error: string }
 
@@ -170,9 +195,10 @@ async function requestPayload(db: SupabaseClient, requestId: string): Promise<Bu
   }
 }
 
-async function sendToAdmins(db: SupabaseClient, req: Request, payload: Payload) {
+/** To every admin's phones, or only to `onlyUserId`'s (the test). */
+async function sendToAdmins(db: SupabaseClient, req: Request, payload: Payload, onlyUserId?: string) {
   const { data: admins } = await db.from('app_users').select('id').eq('role', 'admin')
-  const adminIds = (admins ?? []).map((a) => a.id)
+  const adminIds = (admins ?? []).map((a) => a.id).filter((id) => !onlyUserId || id === onlyUserId)
   if (!adminIds.length) return { sent: 0 }
   const { data: subs } = await db
     .from('push_subscriptions')
@@ -180,8 +206,10 @@ async function sendToAdmins(db: SupabaseClient, req: Request, payload: Payload) 
     .in('user_id', adminIds)
   if (!subs?.length) return { sent: 0 }
 
+  // web-push only accepts an https: or mailto: contact (not http://localhost).
+  const origin = req.headers.get('origin') ?? ''
   webpush.setVapidDetails(
-    Deno.env.get('VAPID_SUBJECT') ?? req.headers.get('origin') ?? 'mailto:popis@example.com',
+    Deno.env.get('VAPID_SUBJECT') ?? (origin.startsWith('https://') ? origin : 'mailto:popis@example.com'),
     Deno.env.get('VAPID_PUBLIC_KEY')!,
     Deno.env.get('VAPID_PRIVATE_KEY')!,
   )
