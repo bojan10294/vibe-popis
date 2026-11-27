@@ -185,6 +185,10 @@ export function DeliveryDetail() {
 
       {check && <ArrivalCheck check={check} />}
 
+      <Button onClick={() => navigate(`/admin/deliveries/${id}/edit`)} className="w-full">
+        ✏ Izmeni fakturu
+      </Button>
+
       <Button variant="ghost" onClick={onDelete} className="text-red-500">
         Obriši fakturu
       </Button>

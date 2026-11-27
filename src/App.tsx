@@ -65,6 +65,7 @@ function AppRoutes() {
       <Route path="/admin/compare" element={<RequireRole role="admin"><Compare /></RequireRole>} />
       <Route path="/admin/deliveries" element={<RequireRole role="admin"><Deliveries /></RequireRole>} />
       <Route path="/admin/deliveries/:id" element={<RequireRole role="admin"><DeliveryDetail /></RequireRole>} />
+      <Route path="/admin/deliveries/:id/edit" element={<RequireRole role="admin"><DeliverySession admin /></RequireRole>} />
       <Route path="/admin/users" element={<RequireRole role="admin"><Users /></RequireRole>} />
       <Route path="/admin/orders" element={<RequireRole role="admin"><OrderList /></RequireRole>} />
       <Route path="/admin/orders/:countId" element={<RequireRole role="admin"><OrderList /></RequireRole>} />

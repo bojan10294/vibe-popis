@@ -485,6 +485,20 @@ export async function confirmDelivery(id: string, note: string, orderCheck: Deli
   void sb().functions.invoke('notify-count-finished', { body: { delivery_id: id } }).catch(() => {})
 }
 
+/**
+ * Admin edited a faktura: the note, and for a confirmed one the refreshed
+ * naručeno vs stiglo (undefined = leave it). Lines are saved as they change.
+ */
+export async function saveDeliveryEdit(
+  id: string,
+  note: string,
+  orderCheck: DeliveryCheckSnapshot | null | undefined,
+): Promise<void> {
+  await run(
+    sb().from('deliveries').update(orderCheck === undefined ? { note } : { note, order_check: orderCheck }).eq('id', id),
+  )
+}
+
 /** Its lines go with it (FK on delete cascade). */
 export async function deleteDelivery(id: string): Promise<void> {
   await run(sb().from('deliveries').delete().eq('id', id))

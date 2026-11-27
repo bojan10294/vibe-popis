@@ -10,6 +10,7 @@ import {
   saveDeliveryLine,
   setDeliverySupplier,
   createArticleRequest,
+  saveDeliveryEdit,
   deleteArticleRequest,
   listRequestsForDelivery,
 } from '../data/repository'
@@ -32,7 +33,11 @@ interface Picked {
   direction: DeliveryDirection
 }
 
-export function DeliverySession() {
+/**
+ * Unos fakture. With `admin`, the same screen edits an entered faktura (also a
+ * confirmed one): no confirming and no notification, "Sačuvaj" goes back.
+ */
+export function DeliverySession({ admin = false }: { admin?: boolean } = {}) {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [delivery, setDelivery] = useState<Delivery | null>(null)
@@ -90,7 +95,7 @@ export function DeliverySession() {
 
   if (loading) return <Spinner />
   if (!delivery || !id) return <p className="text-slate-500">Faktura nije pronađena.</p>
-  if (delivery.status === 'confirmed') {
+  if (delivery.status === 'confirmed' && !admin) {
     return (
       <div className="space-y-3">
         <p className="text-slate-600">Ova faktura je već potvrđena.</p>
@@ -132,6 +137,27 @@ export function DeliverySession() {
     }
     await confirmDelivery(id, note.trim(), check)
     navigate('/count', { state: { deliveryConfirmed: true } })
+  }
+
+  /** Admin: keeps the edits, refreshes naručeno vs stiglo, back to the faktura. */
+  const saveAdmin = async () => {
+    setConfirming(true)
+    let check: DeliveryCheckSnapshot | null | undefined
+    if (delivery.status === 'confirmed') {
+      try {
+        check = await checkDelivery(delivery)
+      } catch {
+        check = undefined
+      }
+    }
+    try {
+      await saveDeliveryEdit(id, note.trim(), check)
+    } catch (e) {
+      setConfirming(false)
+      alert(`Nije sačuvano: ${e instanceof Error ? e.message : e}`)
+      return
+    }
+    navigate(`/admin/deliveries/${id}`)
   }
 
   const removeRequest = async (r: ArticleRequest) => {
@@ -258,8 +284,12 @@ export function DeliverySession() {
   return (
     <div className="space-y-4 pb-28">
       <div>
-        <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Unos fakture</h1>
-        <p className="text-sm text-slate-500">Nađi artikal, upiši koliko je stiglo ili koliko vraćamo.</p>
+        <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">{admin ? 'Izmena fakture' : 'Unos fakture'}</h1>
+        <p className="text-sm text-slate-500">
+          {admin
+            ? `${delivery.user_name} · dodirni stavku da je ispraviš, ✕ da je obrišeš, pretragom dodaj novu.`
+            : 'Nađi artikal, upiši koliko je stiglo ili koliko vraćamo.'}
+        </p>
       </div>
 
       <div className="space-y-1.5">
@@ -332,22 +362,49 @@ export function DeliverySession() {
         <p className="px-1 text-sm text-slate-500">Izaberi dobavljača da vidiš njegove artikle, ili samo kucaj.</p>
       ) : null}
 
-      <button
-        onClick={() => setRequesting(true)}
-        className="w-full rounded-xl border border-dashed border-slate-300 px-3 py-2.5 text-left text-sm font-medium text-brand-700 hover:bg-slate-50"
-      >
-        ＋ Nema ga na spisku? Dodaj novi artikal
-      </button>
+      {!admin && (
+        <button
+          onClick={() => setRequesting(true)}
+          className="w-full rounded-xl border border-dashed border-slate-300 px-3 py-2.5 text-left text-sm font-medium text-brand-700 hover:bg-slate-50"
+        >
+          ＋ Nema ga na spisku? Dodaj novi artikal
+        </button>
+      )}
 
       {lineSections}
 
+      {admin && (
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-medium text-slate-600">Napomena</span>
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={2}
+            className="w-full rounded-xl border border-slate-200 bg-surface px-3.5 py-2.5 text-base text-slate-800 outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15"
+          />
+        </label>
+      )}
+
       <BottomBar>
-        <Button variant="ghost" onClick={() => navigate('/count')}>
-          Kasnije
-        </Button>
-        <Button onClick={() => setReviewing(true)} disabled={!hasItems} className="flex-1">
-          Proveri i potvrdi →
-        </Button>
+        {admin ? (
+          <>
+            <Button variant="ghost" onClick={() => navigate(`/admin/deliveries/${id}`)}>
+              Nazad
+            </Button>
+            <Button onClick={saveAdmin} disabled={confirming} className="flex-1">
+              {confirming ? 'Čuvam...' : '✓ Sačuvaj izmene'}
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button variant="ghost" onClick={() => navigate('/count')}>
+              Kasnije
+            </Button>
+            <Button onClick={() => setReviewing(true)} disabled={!hasItems} className="flex-1">
+              Proveri i potvrdi →
+            </Button>
+          </>
+        )}
       </BottomBar>
       {amountSheet}
       {requestSheet}
