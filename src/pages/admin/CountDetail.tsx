@@ -4,14 +4,25 @@ import {
   getCount,
   listArticles,
   listCategories,
+  listCounts,
+  listLagerDates,
+  listLagerStock,
   listLinesForCount,
   listOrdersForCount,
+  pendingForComparison,
 } from '../../data/repository'
 import type { Article, Category, Count, CountLine } from '../../data/types'
 import { describeInput, formatNum, noteOf } from '../../lib/measure'
-import { summarizeLines } from '../../lib/summary'
+import { compareStock, compareTotals, type CompareTotals } from '../../lib/compare'
+import { lagerDateFor } from '../../lib/payment'
 import { Badge, Card, Spinner, formatMoney } from '../../components/ui'
 import { fmtDateTime } from '../../lib/format'
+
+/** Manjak / višak of this Popis, computed exactly like on Poređenje. */
+interface Comparison {
+  date: string
+  totals: CompareTotals
+}
 
 export function CountDetail() {
   const { id } = useParams<{ id: string }>()
@@ -20,6 +31,7 @@ export function CountDetail() {
   const [articles, setArticles] = useState<Article[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [orderCount, setOrderCount] = useState(0)
+  const [comparison, setComparison] = useState<Comparison | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -38,6 +50,16 @@ export function CountDetail() {
       setCategories(cats)
       setOrderCount(orders.length)
       setLoading(false)
+      if (c?.status !== 'finished') return
+      try {
+        const [dates, counts] = await Promise.all([listLagerDates(), listCounts()])
+        const date = lagerDateFor(dates, counts, c)
+        if (!date) return
+        const [stock, pending] = await Promise.all([listLagerStock(date), pendingForComparison(date, c, a)])
+        setComparison({ date, totals: compareTotals(compareStock(stock, a, l, pending)) })
+      } catch {
+        // No comparison: the counted values still show.
+      }
     })()
   }, [id])
 
@@ -61,8 +83,6 @@ export function CountDetail() {
       }))
   }, [lines, categories, articleMap])
 
-  const summary = useMemo(() => summarizeLines(lines), [lines])
-  const hasBook = lines.some((l) => l.book_stock != null)
 
   if (loading) return <Spinner />
   if (!count) return <p className="text-slate-500">Popis nije pronađen.</p>
@@ -94,7 +114,7 @@ export function CountDetail() {
         {count.status === 'finished' && (
           <div className="flex flex-wrap gap-2">
             <Link
-              to={`/admin/compare?count=${count.id}`}
+              to={`/admin/compare?count=${count.id}${comparison ? `&date=${comparison.date}` : ''}`}
               className="rounded-xl border border-slate-200 bg-surface px-4 py-2.5 font-medium text-slate-700 hover:bg-slate-50"
             >
               Uporedi sa knjigovodstvom
@@ -109,11 +129,22 @@ export function CountDetail() {
         )}
       </div>
 
-      {hasBook && (
-        <div className="grid grid-cols-2 gap-3">
-          <Card className="border-red-200"><p className="text-xs text-slate-500">Manjak</p><p className="text-lg font-bold text-red-600">{formatMoney(summary.shortageValue)}</p></Card>
-          <Card className="border-green-200"><p className="text-xs text-slate-500">Višak</p><p className="text-lg font-bold text-green-600">{formatMoney(summary.surplusValue)}</p></Card>
-        </div>
+      {comparison && (
+        <Link to={`/admin/compare?count=${count.id}&date=${comparison.date}`} className="block space-y-1.5">
+          <div className="grid grid-cols-2 gap-3">
+            <Card className="border-red-200">
+              <p className="text-xs text-slate-500">Manjak ({comparison.totals.shortN})</p>
+              <p className="text-lg font-bold text-red-600">{formatMoney(comparison.totals.shortage)} din</p>
+            </Card>
+            <Card className="border-green-200">
+              <p className="text-xs text-slate-500">Višak ({comparison.totals.surN})</p>
+              <p className="text-lg font-bold text-green-600">{formatMoney(comparison.totals.surplus)} din</p>
+            </Card>
+          </div>
+          <p className="px-1 text-xs text-slate-400">
+            Prema lager listi od {fmtDate(comparison.date)}, isto kao na Poređenju. Dodirni za detalje →
+          </p>
+        </Link>
       )}
 
       {groups.map((g) => (
@@ -123,8 +154,6 @@ export function CountDetail() {
             <table className="w-full text-sm">
               <tbody>
                 {g.lines.map((l) => {
-                  const diff = l.difference
-                  const tone = diff == null ? '' : diff > 0 ? 'text-red-600' : diff < 0 ? 'text-green-600' : ''
                   const nema = (l.input.kind === 'yes_no' && !l.input.has) || noteOf(l.input) !== ''
                   return (
                     <tr key={l.id} className="border-t border-slate-100 first:border-t-0">
@@ -132,11 +161,6 @@ export function CountDetail() {
                       <td className={`px-3 py-2 text-right ${nema ? 'font-semibold text-red-600' : 'text-slate-700'}`}>
                         {describe(l)}
                       </td>
-                      {hasBook && (
-                        <td className={`px-3 py-2 text-right ${tone}`}>
-                          {diff == null ? '—' : `knj. ${formatNum(l.book_stock)} · ${diff > 0 ? '+' : ''}${formatNum(diff)}`}
-                        </td>
-                      )}
                     </tr>
                   )
                 })}
@@ -151,4 +175,9 @@ export function CountDetail() {
       )}
     </div>
   )
+}
+
+function fmtDate(iso: string): string {
+  const [y, m, d] = iso.split('-')
+  return `${d}.${m}.${y}.`
 }

@@ -20,6 +20,28 @@ interface AuthState {
 
 const AuthContext = createContext<AuthState | null>(null)
 
+// The logged-in user, kept so the app still opens without internet (e.g. a
+// popis in the storage room). The token is checked again once online.
+const USER_KEY = 'popis:user'
+
+function cachedUser(): User | null {
+  try {
+    const raw = localStorage.getItem(USER_KEY)
+    return raw ? (JSON.parse(raw) as User) : null
+  } catch {
+    return null
+  }
+}
+
+function cacheUser(u: User | null): void {
+  try {
+    if (u) localStorage.setItem(USER_KEY, JSON.stringify(u))
+    else localStorage.removeItem(USER_KEY)
+  } catch {
+    // ignore
+  }
+}
+
 /** First admin login fills an empty database with the starting article list. */
 async function afterLogin(user: User) {
   if (user.role === 'admin') await seedIfEmpty().catch((e) => console.error('seed failed', e))
@@ -38,9 +60,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const u = await run<User | null>(sb().rpc('app_me', { p_token: token }))
           if (!u) setToken(null)
           else await afterLogin(u)
+          cacheUser(u)
           if (alive) setUser(u)
         } catch (e) {
+          // No connection: stay logged in as before.
           console.error(e)
+          if (alive) setUser(cachedUser())
         }
       }
       if (alive) setLoading(false)
@@ -59,6 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       )
       if (!res) return { ok: false, error: 'Pogrešno ime ili PIN.' }
       setToken(res.token)
+      cacheUser(res.user)
       await afterLogin(res.user)
       setUser(res.user)
       return { ok: true }
@@ -71,6 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const token = getToken()
     if (token) sb().rpc('app_logout', { p_token: token }).then(() => undefined, () => undefined)
     setToken(null)
+    cacheUser(null)
     setUser(null)
   }, [])
 

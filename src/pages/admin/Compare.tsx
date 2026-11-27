@@ -9,12 +9,14 @@ import {
   listLagerDates,
   listLagerStock,
   listLinesForCount,
+  listNotOnSef,
+  setNotOnSef,
 } from '../../data/repository'
 import type { Article, Count, CountLine, Delivery, DeliveryLine, LagerStock } from '../../data/types'
-import { compareStock, defaultCountFor, pendingByCode, tolerance, type CompareRow } from '../../lib/compare'
+import { compareStock, compareTotals, defaultCountFor, pendingByCode, tolerance, type CompareRow } from '../../lib/compare'
 import { bookUnitLabel, isRetired } from '../../lib/lager'
 import { formatNum } from '../../lib/measure'
-import { fmtDateTime, fold } from '../../lib/format'
+import { fmtDateTime, fold, isBefore } from '../../lib/format'
 import { Card, Select, Spinner, formatMoney } from '../../components/ui'
 
 type Filter = 'diff' | 'all' | 'notCounted' | 'unlinked'
@@ -56,17 +58,23 @@ export function Compare() {
   const countId = params.get('count') ?? (date ? defaultCountFor(counts, date)?.id : counts[0]?.id) ?? ''
   const count = counts.find((c) => c.id === countId)
   const asking = params.get('ask') === '1'
-  const noSefParam = params.get('nosef') ?? ''
-  const noSef = useMemo(() => new Set(noSefParam.split(',').filter(Boolean)), [noSefParam])
+  /** Fakture the accountant doesn't have yet, saved per PDF date (also used by the ordering list). */
+  const [noSef, setNoSef] = useState<Set<string>>(new Set())
   // Only fakture entered before the Popis count: those goods were on the shelf when counted.
   const countedIds = useMemo(
     () =>
       [...noSef].filter((id) => {
         const d = deliveries.find((x) => x.id === id)
-        return d && count && d.created_at < count.datetime
+        return d && count && isBefore(d.created_at, count.datetime)
       }),
     [noSef, deliveries, count],
   )
+
+  useEffect(() => {
+    if (!date) return
+    // Before migration 016 there is no table: the picker just starts empty.
+    listNotOnSef(date).then((ids) => setNoSef(new Set(ids)), () => setNoSef(new Set()))
+  }, [date])
 
   useEffect(() => {
     if (!date) return
@@ -93,11 +101,18 @@ export function Compare() {
   const pending = useMemo(() => pendingByCode(articles, pendingLines), [articles, pendingLines])
   const rows = useMemo(() => compareStock(stock, articles, lines, pending), [stock, articles, lines, pending])
 
-  const toggleNoSef = (id: string) => {
+  const toggleNoSef = async (id: string) => {
+    const on = !noSef.has(id)
     const next = new Set(noSef)
-    if (next.has(id)) next.delete(id)
-    else next.add(id)
-    setParam('nosef', [...next].join(','))
+    if (on) next.add(id)
+    else next.delete(id)
+    setNoSef(next)
+    try {
+      await setNotOnSef(date, id, on)
+    } catch (e) {
+      setNoSef(noSef)
+      setError(`Nije sačuvano: ${e instanceof Error ? e.message : e}`)
+    }
   }
   const linkedCodes = useMemo(() => new Set(articles.map((a) => a.code).filter(Boolean)), [articles])
   const unlinked = useMemo(
@@ -105,21 +120,7 @@ export function Compare() {
     [stock, linkedCodes],
   )
 
-  const stats = useMemo(() => {
-    const s = { shortage: 0, surplus: 0, shortN: 0, surN: 0, ok: 0, notCounted: 0 }
-    for (const r of rows) {
-      if (r.counted == null) s.notCounted++
-      else if (r.ok) s.ok++
-      else if (r.diff! < 0) {
-        s.shortN++
-        s.shortage += r.value ?? 0
-      } else {
-        s.surN++
-        s.surplus += r.value ?? 0
-      }
-    }
-    return s
-  }, [rows])
+  const stats = useMemo(() => compareTotals(rows), [rows])
 
   const words = fold(query).split(/\s+/).filter(Boolean)
   const matches = (...texts: string[]) => {
@@ -355,8 +356,8 @@ function NotOnSef({
   }, [asking])
 
   const sorted = [...deliveries].sort((a, b) => b.created_at.localeCompare(a.created_at))
-  const before = sorted.filter((d) => d.created_at < count.datetime)
-  const after = sorted.filter((d) => d.created_at >= count.datetime)
+  const before = sorted.filter((d) => isBefore(d.created_at, count.datetime))
+  const after = sorted.filter((d) => !isBefore(d.created_at, count.datetime))
   const shown = showAll ? before : before.filter((d, i) => i < SUGGESTED || selected.has(d.id))
   const chosen = before.filter((d) => selected.has(d.id))
   const label = (d: Delivery) => d.supplier_name ?? 'Bez dobavljača'
@@ -387,8 +388,8 @@ function NotOnSef({
       <div>
         <p className="font-bold text-slate-900">Koje fakture knjigovođa još nema?</p>
         <p className="text-sm text-slate-500">
-          Štikliraj one koje nisu stigle na SEF. Dodaju se na knjigovodstveno stanje (stiglo +, vraćeno −). Računaju se
-          samo fakture unete pre popisa od {fmtDateTime(count.datetime)}.
+          Štikliraj one koje nisu stigle na SEF. Dodaju se na knjigovodstveno stanje (stiglo +, vraćeno −), ovde i u
+          listi nabavke (keš/račun). Računaju se samo fakture unete pre popisa od {fmtDateTime(count.datetime)}.
         </p>
       </div>
 

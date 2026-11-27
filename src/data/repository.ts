@@ -1,6 +1,8 @@
 import { run, sb } from './supabase'
 import { uuid } from '../lib/crypto'
 import { needsOrder, noteOf, orderThreshold, quantityOf, round, suggestedQuantity } from '../lib/measure'
+import { pendingByCode } from '../lib/compare'
+import { isBefore } from '../lib/format'
 import type {
   Article,
   BookStockImport,
@@ -13,7 +15,6 @@ import type {
   LagerArticle,
   LagerStock,
   OrderLine,
-  OrderStatus,
   Payment,
   Role,
   Supplier,
@@ -156,21 +157,19 @@ export async function createCount(user: User): Promise<Count> {
   return count
 }
 
-export async function setCategoryDone(countId: string, categoryId: string, done: boolean): Promise<Count | undefined> {
-  const count = await getCount(countId)
-  if (!count) return
-  const set = new Set(count.done_categories)
-  if (done) set.add(categoryId)
-  else set.delete(categoryId)
-  const done_categories = Array.from(set)
+/** Categories the worker finished (the count screen keeps them on the phone first, see lib/outbox). */
+export async function saveDoneCategories(countId: string, done_categories: string[]): Promise<void> {
   await run(sb().from('counts').update({ done_categories }).eq('id', countId))
-  return { ...count, done_categories }
 }
 
-/** Marks the count finished and builds its order list. */
+/**
+ * Builds the order list, then marks the count finished. In this order so a
+ * dropped connection halfway never leaves a finished count without its list;
+ * running it again is safe.
+ */
 export async function finishCount(id: string): Promise<void> {
-  await run(sb().from('counts').update({ status: 'finished', finished_at: new Date().toISOString() }).eq('id', id))
   await buildOrderList(id)
+  await run(sb().from('counts').update({ status: 'finished', finished_at: new Date().toISOString() }).eq('id', id))
   // Push "popis završen" to the admins' phones. Never blocks or fails the finish.
   void notifyCountFinished(id).catch(() => {})
 }
@@ -202,30 +201,32 @@ export async function listLinesForCount(countId: string): Promise<CountLine[]> {
   return run<CountLine[]>(sb().from('count_lines').select('*').eq('count_id', countId))
 }
 
-/** Create or update the entered value for an article in a count session. */
-export async function saveLine(countId: string, article: Article, input: CountInput): Promise<CountLine> {
-  const existing = await run<{ id: string } | null>(
-    sb().from('count_lines').select('id').eq('count_id', countId).eq('article_id', article.id).maybeSingle(),
-  )
-  const counted = quantityOf(article, input)
-  const book = article.book_stock ?? null
-  const difference = book == null ? null : round(book - counted)
-  const line: CountLine = {
-    id: existing?.id ?? uuid(),
+/**
+ * The line for an entered value, built on the phone (no network), so counting
+ * works without internet. `existingId` keeps the id of an earlier entry.
+ * Differences against the accountant are not stored here: Poređenje computes
+ * them from the right day's Lager lista.
+ */
+export function buildLine(countId: string, article: Article, input: CountInput, existingId?: string): CountLine {
+  return {
+    id: existingId ?? uuid(),
     count_id: countId,
     article_id: article.id,
     article_name: article.name,
     category_id: article.category_id,
     unit: article.kind === 'bottle' ? 'l' : article.kind === 'espresso' ? 'kesa' : article.unit,
     input,
-    counted,
-    book_stock: book,
-    difference,
+    counted: quantityOf(article, input),
+    book_stock: null,
+    difference: null,
     unit_price: article.last_unit_price,
-    difference_value: difference == null ? null : round(difference * article.last_unit_price, 2),
+    difference_value: null,
   }
-  await run(sb().from('count_lines').upsert(line))
-  return line
+}
+
+/** Sends entered lines; one per article per count (a newer entry replaces the older). */
+export async function putLines(lines: CountLine[]): Promise<void> {
+  if (lines.length) await run(sb().from('count_lines').upsert(lines, { onConflict: 'count_id,article_id' }))
 }
 
 // ---------------------------------------------------------------------------
@@ -366,7 +367,6 @@ export async function buildOrderList(countId: string): Promise<OrderLine[]> {
       suggested_order_qty: prev?.suggested_order_qty ?? qty,
       order_unit: prev?.order_unit ?? article.order_unit,
       for_date: prev?.for_date ?? new Date().toISOString().slice(0, 10),
-      order_status: prev?.order_status ?? 'pending',
       note: noteOf(line.input) || null,
       // Only when set by hand, so finishing a count never touches the column otherwise.
       ...(prev?.payment ? { payment: prev.payment } : {}),
@@ -390,9 +390,6 @@ export async function deleteOrderLine(id: string): Promise<void> {
   await run(sb().from('order_lines').delete().eq('id', id))
 }
 
-export async function setOrderStatus(id: string, status: OrderStatus): Promise<void> {
-  await run(sb().from('order_lines').update({ order_status: status }).eq('id', id))
-}
 
 // ---------------------------------------------------------------------------
 // Unos fakture (deliveries)
@@ -480,4 +477,46 @@ export async function confirmDelivery(id: string, note: string): Promise<void> {
 /** Its lines go with it (FK on delete cascade). */
 export async function deleteDelivery(id: string): Promise<void> {
   await run(sb().from('deliveries').delete().eq('id', id))
+}
+
+// ---------------------------------------------------------------------------
+// Fakture van SEF-a (not yet with the accountant) per Lager lista
+// ---------------------------------------------------------------------------
+
+/** Fakture marked "knjigovođa je nema" for the Lager lista of `date`. */
+export async function listNotOnSef(date: string): Promise<string[]> {
+  const rows = await run<{ delivery_id: string }[]>(
+    sb().from('lager_not_on_sef').select('delivery_id').eq('date', date),
+  )
+  return rows.map((r) => r.delivery_id)
+}
+
+export async function setNotOnSef(date: string, deliveryId: string, notOnSef: boolean): Promise<void> {
+  if (notOnSef) {
+    await run(sb().from('lager_not_on_sef').upsert({ date, delivery_id: deliveryId }))
+  } else {
+    await run(sb().from('lager_not_on_sef').delete().eq('date', date).eq('delivery_id', deliveryId))
+  }
+}
+
+/**
+ * What the accountant doesn't have yet for the Lager lista of `date`, per
+ * accountant code (stiglo − vraćeno, in their unit): the fakture marked for
+ * that date that were entered before the Popis. Fakture entered after it were
+ * not on the shelf when it was counted. Empty when the tables don't exist yet.
+ */
+export async function pendingForComparison(
+  date: string,
+  count: Pick<Count, 'datetime'>,
+  articles: Article[],
+): Promise<Map<string, number>> {
+  try {
+    const ids = await listNotOnSef(date)
+    if (!ids.length) return new Map()
+    const dels = await run<Delivery[]>(sb().from('deliveries').select('*').in('id', ids))
+    const counted = dels.filter((d) => d.status === 'confirmed' && isBefore(d.created_at, count.datetime))
+    return pendingByCode(articles, await listDeliveryLinesFor(counted.map((d) => d.id)))
+  } catch {
+    return new Map()
+  }
 }

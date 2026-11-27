@@ -114,6 +114,33 @@ export function compareStock(
   )
 }
 
+export interface CompareTotals {
+  /** Value of all manjak (din, positive). */
+  shortage: number
+  surplus: number
+  shortN: number
+  surN: number
+  ok: number
+  notCounted: number
+}
+
+/** Manjak / višak totals, the same everywhere they are shown. */
+export function compareTotals(rows: CompareRow[]): CompareTotals {
+  const t: CompareTotals = { shortage: 0, surplus: 0, shortN: 0, surN: 0, ok: 0, notCounted: 0 }
+  for (const r of rows) {
+    if (r.counted == null) t.notCounted++
+    else if (r.ok) t.ok++
+    else if (r.diff! < 0) {
+      t.shortN++
+      t.shortage += Math.abs(r.value ?? 0)
+    } else {
+      t.surN++
+      t.surplus += r.value ?? 0
+    }
+  }
+  return { ...t, shortage: round(t.shortage, 2), surplus: round(t.surplus, 2) }
+}
+
 /**
  * The Popis to compare a PDF dated `date` with: the last finished one from the
  * night before (started before noon of that day, so one after midnight counts).

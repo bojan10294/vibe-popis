@@ -58,7 +58,7 @@ function PushCard() {
 
 export function Dashboard() {
   const [counts, setCounts] = useState<Count[]>([])
-  const [pendingOrders, setPendingOrders] = useState<number | null>(null)
+  const [orderLineCount, setOrderLineCount] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -68,7 +68,7 @@ export function Dashboard() {
       const last = all.find((c) => c.status === 'finished')
       if (last) {
         const orders = await listOrdersForCount(last.id)
-        setPendingOrders(orders.filter((o) => o.order_status === 'pending').length)
+        setOrderLineCount(orders.length)
       }
       setLoading(false)
     })()
@@ -89,7 +89,7 @@ export function Dashboard() {
           <Card className="border-brand-200 bg-brand-50 hover:bg-brand-100">
             <p className="text-sm text-brand-700">Poslednji popis: {fmtDateTime(last.datetime)} · {last.user_name}</p>
             <p className="mt-1 text-2xl font-bold text-brand-800">
-              {pendingOrders ?? 0} artikala za poručiti →
+              {orderLineCount ?? 0} artikala na listi nabavke →
             </p>
           </Card>
         </Link>

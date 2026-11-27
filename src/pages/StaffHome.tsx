@@ -11,6 +11,7 @@ import {
 import { Card, Spinner } from '../components/ui'
 import { Fireworks } from '../components/Fireworks'
 import { countedOn } from '../lib/measure'
+import { activeSnapshotId } from '../lib/outbox'
 
 export function StaffHome() {
   const { user } = useAuth()
@@ -24,18 +25,25 @@ export function StaffHome() {
   const [articleCount, setArticleCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [starting, setStarting] = useState(false)
+  const [offline, setOffline] = useState(false)
 
   useEffect(() => {
     if (!user) return
     ;(async () => {
-      const [active, delivery] = await Promise.all([
-        getActiveCountForUser(user.id),
-        getActiveDeliveryForUser(user.id),
-      ])
-      setActiveId(active?.id ?? null)
-      setDeliveryId(delivery?.id ?? null)
-      const arts = await listArticles({ activeOnly: true })
-      setArticleCount(arts.filter((a) => countedOn(a, new Date())).length)
+      try {
+        const [active, delivery, arts] = await Promise.all([
+          getActiveCountForUser(user.id),
+          getActiveDeliveryForUser(user.id).catch(() => undefined),
+          listArticles({ activeOnly: true }),
+        ])
+        setActiveId(active?.id ?? null)
+        setDeliveryId(delivery?.id ?? null)
+        setArticleCount(arts.filter((a) => countedOn(a, new Date())).length)
+      } catch {
+        // No internet: a popis kept on this phone can still be continued.
+        setOffline(true)
+        setActiveId(activeSnapshotId())
+      }
       setLoading(false)
     })()
   }, [user])
@@ -64,6 +72,12 @@ export function StaffHome() {
         <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Zdravo, {user.name} 👋</h1>
       </div>
 
+      {offline && (
+        <Card className="border-amber-200 bg-amber-50 text-sm text-amber-800">
+          📴 Nema interneta. {activeId ? 'Nezavršen popis možeš da nastaviš, šalje se kad se veza vrati.' : 'Novi popis i faktura mogu kad se vrati veza.'}
+        </Card>
+      )}
+
       {justFinished && !activeId && <Fireworks />}
       {justFinished && !activeId && (
         <Card className="flex items-center gap-3 border-green-200 bg-green-50">
@@ -81,7 +95,7 @@ export function StaffHome() {
 
       <button
         onClick={activeId ? () => navigate(`/count/${activeId}`) : startCount}
-        disabled={starting}
+        disabled={starting || (offline && !activeId)}
         className="group relative w-full overflow-hidden rounded-3xl bg-gradient-to-br from-brand-600 to-indigo-600 p-6 text-left text-white shadow-lg shadow-brand-600/30 transition active:scale-[0.99] disabled:opacity-70"
       >
         <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10" />
@@ -99,7 +113,7 @@ export function StaffHome() {
 
       <button
         onClick={deliveryId ? () => navigate(`/delivery/${deliveryId}`) : startDelivery}
-        disabled={starting}
+        disabled={starting || offline}
         className="flex w-full items-center gap-4 rounded-3xl border border-slate-200 bg-surface p-5 text-left shadow-sm transition active:scale-[0.99] disabled:opacity-70"
       >
         <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-2xl">📦</span>

@@ -1,20 +1,25 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import {
-  finishCount,
-  getCount,
-  listArticles,
-  listCategories,
-  listLinesForCount,
-  saveLine,
-  setCategoryDone,
-} from '../data/repository'
-import type { Article, Count, CountInput, CountLine } from '../data/types'
+import { buildLine, finishCount, getCount, listArticles, listCategories, listLinesForCount } from '../data/repository'
+import type { Article, Category, Count, CountInput, CountLine } from '../data/types'
 import { countedOn, describeInput } from '../lib/measure'
+import {
+  flushOutbox,
+  forgetCount,
+  loadSnapshot,
+  pendingCount,
+  pendingDone,
+  pendingLines,
+  queueDone,
+  queueLine,
+  saveSnapshot,
+} from '../lib/outbox'
 import { MeasureInput } from '../components/MeasureInput'
 import { Button, Spinner } from '../components/ui'
 
 const NO_CAT = '__none'
+/** While something waits on the phone, try sending it this often. */
+const RETRY_MS = 15_000
 
 interface Group {
   id: string
@@ -27,44 +32,108 @@ type View =
   | { mode: 'article'; groupId: string; index: number; fromReview: boolean }
   | { mode: 'review' }
 
+function buildGroups(count: Count | null, allArticles: Article[], categories: Category[]): Group[] {
+  // Weekly articles (glasses, spoons...) only show up on their day.
+  const day = count ? new Date(count.datetime) : new Date()
+  const articles = allArticles.filter((a) => countedOn(a, day))
+  const gs: Group[] = categories.map((cat) => ({
+    id: cat.id,
+    name: cat.name,
+    articles: articles.filter((a) => a.category_id === cat.id),
+  }))
+  const known = new Set(categories.map((cat) => cat.id))
+  const orphans = articles.filter((a) => !a.category_id || !known.has(a.category_id))
+  if (orphans.length) gs.push({ id: NO_CAT, name: 'Bez kategorije', articles: orphans })
+  return gs.filter((g) => g.articles.length > 0)
+}
+
 export function CountSession() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [count, setCount] = useState<Count | null>(null)
-  const [groups, setGroups] = useState<Group[]>([])
+  const [articles, setArticles] = useState<Article[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
   const [lines, setLines] = useState<Map<string, CountLine>>(new Map())
   const [view, setView] = useState<View>({ mode: 'categories' })
   const [loading, setLoading] = useState(true)
+  /** Couldn't load and nothing saved on this phone. */
+  const [loadFailed, setLoadFailed] = useState(false)
   const [finishing, setFinishing] = useState(false)
+  /** The last "Završi" didn't go through (no internet). */
+  const [finishFailed, setFinishFailed] = useState(false)
+  /** Entries still only on this phone, and whether the last send failed. */
+  const [waiting, setWaiting] = useState(0)
+  const [offline, setOffline] = useState(false)
   /** Article list inside a category, for jumping back to any article. */
   const [showList, setShowList] = useState(false)
 
-  useEffect(() => {
+  const groups = useMemo(() => buildGroups(count, articles, categories), [count, articles, categories])
+
+  const load = useCallback(async () => {
     if (!id) return
-    ;(async () => {
-      const [c, allArticles, categories, ls] = await Promise.all([
+    setLoading(true)
+    setLoadFailed(false)
+    try {
+      const [c, arts, cats, ls] = await Promise.all([
         getCount(id),
         listArticles({ activeOnly: true }),
         listCategories(),
         listLinesForCount(id),
       ])
-      // Weekly articles (glasses, spoons...) only show up on their day.
-      const day = c ? new Date(c.datetime) : new Date()
-      const articles = allArticles.filter((a) => countedOn(a, day))
-      const gs: Group[] = categories.map((cat) => ({
-        id: cat.id,
-        name: cat.name,
-        articles: articles.filter((a) => a.category_id === cat.id),
-      }))
-      const known = new Set(categories.map((cat) => cat.id))
-      const orphans = articles.filter((a) => !a.category_id || !known.has(a.category_id))
-      if (orphans.length) gs.push({ id: NO_CAT, name: 'Bez kategorije', articles: orphans })
-      setCount(c ?? null)
-      setGroups(gs.filter((g) => g.articles.length > 0))
-      setLines(new Map(ls.map((l) => [l.article_id, l])))
-      setLoading(false)
-    })()
+      // What is still waiting on the phone is newer than the server copy.
+      const merged = new Map(ls.map((l) => [l.article_id, l]))
+      for (const l of pendingLines(id)) merged.set(l.article_id, l)
+      const done = pendingDone(id)
+      setCount(c ? (done ? { ...c, done_categories: done } : c) : null)
+      setArticles(arts)
+      setCategories(cats)
+      setLines(merged)
+    } catch {
+      // No internet: reopen from the copy kept on this phone.
+      const snap = loadSnapshot(id)
+      if (!snap) {
+        setLoadFailed(true)
+        setLoading(false)
+        return
+      }
+      setCount(snap.count)
+      setArticles(snap.articles)
+      setCategories(snap.categories)
+      setLines(new Map(snap.lines.map((l) => [l.article_id, l])))
+      setOffline(true)
+    }
+    setWaiting(pendingCount(id))
+    setLoading(false)
   }, [id])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  // Keep a copy on the phone so the count can be reopened without internet.
+  useEffect(() => {
+    if (!count || count.status !== 'in_progress' || loading) return
+    saveSnapshot({ count, articles, categories, lines: [...lines.values()] })
+  }, [count, articles, categories, lines, loading])
+
+  const send = useCallback(async () => {
+    if (!id) return true
+    const ok = await flushOutbox(id)
+    setWaiting(pendingCount(id))
+    setOffline(!ok)
+    return ok
+  }, [id])
+
+  // Retry in the background while something waits, and as soon as the phone is back online.
+  useEffect(() => {
+    if (!waiting) return
+    const timer = window.setInterval(send, RETRY_MS)
+    window.addEventListener('online', send)
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener('online', send)
+    }
+  }, [waiting, send])
 
   const savingRef = useRef(false)
 
@@ -76,6 +145,14 @@ export function CountSession() {
   const allDone = groups.length > 0 && groups.every((g) => done.has(g.id))
 
   if (loading) return <Spinner />
+  if (loadFailed) {
+    return (
+      <div className="space-y-3">
+        <p className="text-slate-600">Nema interneta, a ovaj popis nije sačuvan na ovom telefonu. Pokušaj kad se vrati veza.</p>
+        <Button onClick={load}>Pokušaj ponovo</Button>
+      </div>
+    )
+  }
   if (!count || !id) return <p className="text-slate-500">Popis nije pronađen.</p>
   if (count.status === 'finished') {
     return (
@@ -85,6 +162,19 @@ export function CountSession() {
       </div>
     )
   }
+
+  const offlineBanner = (offline || waiting > 0) && (
+    <div className={`rounded-xl border px-3 py-2 text-sm ${offline ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-slate-200 bg-surface text-slate-500'}`}>
+      {offline ? (
+        <>
+          📴 <strong>Nema interneta.</strong> Nastavi slobodno, sve se čuva na telefonu i šalje samo čim se veza vrati
+          {waiting > 0 && ` (čeka ${waiting})`}.
+        </>
+      ) : (
+        <>Šaljem sačuvano...</>
+      )}
+    </div>
+  )
 
   const firstOpenIndex = (g: Group) => {
     const i = g.articles.findIndex((a) => !lines.has(a.id))
@@ -101,14 +191,17 @@ export function CountSession() {
     setView({ mode: 'article', groupId: g.id, index, fromReview: false })
   }
 
-  const onSubmit = async (group: Group, index: number, input: CountInput, fromReview: boolean) => {
-    // Ignore double taps while the previous entry is still saving.
+  const onSubmit = (group: Group, index: number, input: CountInput, fromReview: boolean) => {
+    // Ignore a double tap on the same entry.
     if (savingRef.current) return
     savingRef.current = true
+    window.setTimeout(() => (savingRef.current = false), 300)
     const article = group.articles[index]
-    const line = await saveLine(id, article, input).finally(() => {
-      savingRef.current = false
-    })
+    // Saved on the phone right away, sent in the background: counting never waits for the internet.
+    const line = buildLine(id, article, input, lines.get(article.id)?.id)
+    queueLine(line)
+    setWaiting(pendingCount(id))
+    void send()
     const next = new Map(lines).set(article.id, line)
     setLines(next)
     if (fromReview) {
@@ -126,14 +219,28 @@ export function CountSession() {
       return
     }
     // Every article in the category has a value → category is done.
-    const updated = await setCategoryDone(id, group.id, true)
-    if (updated) setCount(updated)
+    const doneNow = Array.from(new Set([...count.done_categories, group.id]))
+    queueDone(id, doneNow)
+    setCount({ ...count, done_categories: doneNow })
+    setWaiting(pendingCount(id))
+    void send()
     setView({ mode: 'categories' })
   }
 
+  /** Sends whatever waits on the phone, then finishes. Without internet nothing is lost. */
   const finish = async () => {
     setFinishing(true)
-    await finishCount(id)
+    setFinishFailed(false)
+    try {
+      if (!(await send())) throw new Error('offline')
+      await finishCount(id)
+    } catch {
+      setOffline(true)
+      setFinishFailed(true)
+      setFinishing(false)
+      return
+    }
+    forgetCount(id)
     navigate('/count', { state: { finished: true } })
   }
 
@@ -145,6 +252,7 @@ export function CountSession() {
     const filled = group.articles.filter((a) => lines.has(a.id)).length
     return (
       <div className="space-y-5 pb-10">
+        {offlineBanner}
         <div className="flex items-center justify-between">
           <button
             onClick={() => setView(view.fromReview ? { mode: 'review' } : { mode: 'categories' })}
@@ -244,10 +352,19 @@ export function CountSession() {
   if (view.mode === 'review') {
     return (
       <div className="space-y-4 pb-28">
+        {offlineBanner}
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Proveri popis</h1>
           <p className="text-sm text-slate-500">Dodirni stavku da je ispraviš.</p>
         </div>
+        {finishFailed && (
+          <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-red-800">
+            <p className="font-bold">⚠ Popis nije poslat, nema interneta.</p>
+            <p className="text-sm">
+              Sve je sačuvano na ovom telefonu, ništa se ne gubi. Kad se vrati internet, pritisni ponovo „Završi popis”.
+            </p>
+          </div>
+        )}
         {groups.map((g) => (
           <section key={g.id} className="space-y-1.5">
             <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">{g.name}</h2>
@@ -282,7 +399,7 @@ export function CountSession() {
               Nazad
             </Button>
             <Button onClick={finish} disabled={finishing} className="flex-1 bg-green-600 hover:brightness-110">
-              {finishing ? 'Čuvam...' : '✓ Sve u redu, završi popis'}
+              {finishing ? 'Šaljem...' : finishFailed ? '↻ Pokušaj ponovo da pošalješ' : '✓ Sve u redu, završi popis'}
             </Button>
           </div>
         </div>
@@ -294,6 +411,7 @@ export function CountSession() {
   const doneCount = groups.filter((g) => done.has(g.id)).length
   return (
     <div className="space-y-4 pb-28">
+      {offlineBanner}
       <div className="flex items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Popis</h1>

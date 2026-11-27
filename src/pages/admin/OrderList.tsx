@@ -11,6 +11,7 @@ import {
   listLinesForCount,
   listOrdersForCount,
   listSuppliers,
+  pendingForComparison,
   updateOrderLine,
   deleteOrderLine,
   setOrderPayment,
@@ -50,7 +51,9 @@ export function OrderList() {
           const [dates, counts, lines] = await Promise.all([listLagerDates(), listCounts(), listLinesForCount(c.id)])
           const date = lagerDateFor(dates, counts, c)
           if (date) {
-            const rows = compareStock(await listLagerStock(date), arts, lines)
+            // Same numbers as Poređenje: fakture the accountant doesn't have yet count as in stock.
+            const [stock, pending] = await Promise.all([listLagerStock(date), pendingForComparison(date, c, arts)])
+            const rows = compareStock(stock, arts, lines, pending)
             setLagerDate(date)
             setRowByCode(new Map(rows.map((r) => [r.code, r])))
           }
@@ -197,7 +200,7 @@ export function OrderList() {
           </p>
           <p className="text-xs text-slate-400">
             {lagerDate
-              ? `Keš/račun prema lager listi od ${fmtDate(lagerDate)}: ono u manjku ide za keš.`
+              ? `Keš/račun prema lager listi od ${fmtDate(lagerDate)} i fakturama kojih knjigovođa još nema (kao na Poređenju): ono u manjku ide za keš.`
               : 'Nema lager liste za ovaj popis — sve ide na račun dok se ne učita.'}
           </p>
           {weekend && (

@@ -44,7 +44,8 @@ se vide u Admin → Fakture.
 Jednom:
 
 1. SQL Editor → pokreni [`supabase/migrations/014_deliveries.sql`](supabase/migrations/014_deliveries.sql),
-   pa [`015_delivery_returns.sql`](supabase/migrations/015_delivery_returns.sql) (povrat robe)
+   pa [`015_delivery_returns.sql`](supabase/migrations/015_delivery_returns.sql) (povrat robe),
+   pa [`016_not_on_sef.sql`](supabase/migrations/016_not_on_sef.sql) (fakture van SEF-a se pamte po lager listi)
 2. `supabase functions deploy notify-count-finished --no-verify-jwt` (nova verzija zna i za fakture)
 
 ## Netlify

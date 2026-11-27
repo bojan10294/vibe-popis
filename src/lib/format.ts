@@ -23,3 +23,8 @@ export function matchesQuery(text: string, query: string): boolean {
   const hay = fold(text)
   return words.every((w) => hay.includes(w))
 }
+
+/** a happened before b (ISO timestamps in any offset format). */
+export function isBefore(a: string, b: string): boolean {
+  return Date.parse(a) < Date.parse(b)
+}

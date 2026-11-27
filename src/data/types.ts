@@ -3,7 +3,6 @@
 
 export type Role = 'admin' | 'staff'
 export type CountStatus = 'in_progress' | 'finished'
-export type OrderStatus = 'pending' | 'ordered'
 
 /**
  * How an article is counted:
@@ -194,7 +193,6 @@ export interface OrderLine {
   suggested_order_qty: number
   order_unit: OrderUnit
   for_date: string
-  order_status: OrderStatus
   /** What the worker wrote is missing (articles with ask_note). */
   note: string | null
   /** Set by hand; null/missing = automatic (see lib/payment.ts). */

@@ -78,7 +78,6 @@ async function countPayload(db: SupabaseClient, countId: string): Promise<Built>
     .from('order_lines')
     .select('id', { count: 'exact', head: true })
     .eq('count_id', countId)
-    .eq('order_status', 'pending')
 
   const n = pending ?? 0
   return {

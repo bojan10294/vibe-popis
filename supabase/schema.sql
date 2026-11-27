@@ -113,7 +113,6 @@ create table if not exists order_lines (
   suggested_order_qty double precision not null default 0,
   order_unit text not null default 'kom',
   for_date date not null,
-  order_status text not null check (order_status in ('pending', 'ordered')),
   note text,
   -- keš / račun set by hand; null = automatic (keš when in manjak vs. the book)
   payment text check (payment in ('cash', 'invoice')),
@@ -372,6 +371,20 @@ begin
 end $$;
 
 grant select, insert, update, delete on deliveries, delivery_lines to anon, authenticated;
+
+-- Fakture the accountant didn't have yet (not on SEF) for the Lager lista of
+-- `date`; added to the accountant's Stanje when comparing (migrations/016).
+create table if not exists lager_not_on_sef (
+  date date not null,
+  delivery_id text not null references deliveries (id) on delete cascade,
+  primary key (date, delivery_id)
+);
+alter table lager_not_on_sef enable row level security;
+drop policy if exists member_read on lager_not_on_sef;
+drop policy if exists admin_write on lager_not_on_sef;
+create policy member_read on lager_not_on_sef for select using (app_is_member());
+create policy admin_write on lager_not_on_sef for all using (app_is_admin()) with check (app_is_admin());
+grant select, insert, update, delete on lager_not_on_sef to anon, authenticated;
 
 -- ---------------------------------------------------------------------------
 -- First admin account. Change the PIN in the app right after the first login.
