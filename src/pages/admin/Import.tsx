@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { businessDayIso } from '../../lib/day'
 import { listArticles, listCategories, listImports, saveLagerImport, type LagerLink } from '../../data/repository'
 import { Button, Card, Input, Select, Spinner } from '../../components/ui'
 import type { Article, BookStockImport, Category } from '../../data/types'
@@ -67,7 +68,7 @@ export function ImportPage() {
       if (!r.rows.length) throw new Error('U PDF-u nije pronađen nijedan artikal. Da li je ovo lager lista?')
       setReport(r)
       setFileName(file.name)
-      setDate(r.date ?? new Date().toISOString().slice(0, 10))
+      setDate(r.date ?? businessDayIso())
       setArticles(arts)
       setCategories(cats)
       setDrafts(initialDrafts(arts, r.rows))

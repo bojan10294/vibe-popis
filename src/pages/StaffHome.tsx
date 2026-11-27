@@ -12,6 +12,7 @@ import { Card, Spinner } from '../components/ui'
 import { Fireworks } from '../components/Fireworks'
 import { countedOn } from '../lib/measure'
 import { activeSnapshotId } from '../lib/outbox'
+import { businessDay } from '../lib/day'
 
 export function StaffHome() {
   const { user } = useAuth()
@@ -63,7 +64,7 @@ export function StaffHome() {
     navigate(`/delivery/${delivery.id}`)
   }
 
-  const today = new Date().toLocaleDateString('sr-Latn-RS', { weekday: 'long', day: 'numeric', month: 'long' })
+  const today = businessDay().toLocaleDateString('sr-Latn-RS', { weekday: 'long', day: 'numeric', month: 'long' })
 
   return (
     <div className="space-y-5">

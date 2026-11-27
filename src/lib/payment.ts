@@ -13,6 +13,7 @@
 
 import type { Article, OrderLine, Payment } from '../data/types'
 import { defaultCountFor, type CompareRow } from './compare'
+import { businessDay, businessDayIso } from './day'
 
 /** Categories that are always "na račun" automatically (still switchable by hand). */
 const ALWAYS_INVOICE_CATEGORIES = new Set(['cat-flasice'])
@@ -44,10 +45,10 @@ export function lagerDateFor<T extends { id: string; datetime: string; status: s
   count: T,
 ): string | undefined {
   const sorted = [...dates].sort()
-  const day = localIso(new Date(count.datetime))
+  const day = businessDayIso(new Date(count.datetime))
   const paired = sorted.find((d) => d >= day && defaultCountFor(counts, d)?.id === count.id)
   if (paired) return paired
-  const limit = new Date(count.datetime)
+  const limit = businessDay(new Date(count.datetime))
   limit.setDate(limit.getDate() + 1)
   const max = localIso(limit)
   return sorted.filter((d) => d <= max).pop()

@@ -1,4 +1,5 @@
 import type { Article, CountInput, MeasureKind, Unit } from '../data/types'
+import { businessWeekday } from './day'
 
 export const KIND_LABELS: Record<MeasureKind, string> = {
   count: 'Komadi',
@@ -68,9 +69,12 @@ export function unitLabel(article: Pick<Article, 'kind' | 'unit'>): Unit {
 /** Index = getDay(); used as "Samo {WEEKDAYS_ON[d]}". */
 export const WEEKDAYS_ON = ['nedeljom', 'ponedeljkom', 'utorkom', 'sredom', 'četvrtkom', 'petkom', 'subotom']
 
-/** Whether the article is in a count started on `date` (weekly articles only on their day). */
+/**
+ * Whether the article is in a count started at `date` (weekly articles only on
+ * their day). Before 07:00 is still the previous day (see lib/day).
+ */
 export function countedOn(article: Pick<Article, 'count_weekday'>, date: Date): boolean {
-  return article.count_weekday == null || article.count_weekday === date.getDay()
+  return article.count_weekday == null || article.count_weekday === businessWeekday(date)
 }
 
 /**
@@ -78,7 +82,8 @@ export function countedOn(article: Pick<Article, 'count_weekday'>, date: Date): 
  * for the whole weekend.
  */
 export function isWeekendOrderDay(date: Date): boolean {
-  return date.getDay() === 4
+  // Thursday's popis, also when it runs past midnight.
+  return businessWeekday(date) === 4
 }
 
 /** True when this count orders up to the weekend target instead of the regular rule. */

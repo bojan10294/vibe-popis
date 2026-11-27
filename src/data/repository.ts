@@ -3,6 +3,7 @@ import { uuid } from '../lib/crypto'
 import { needsOrder, noteOf, orderThreshold, quantityOf, round, suggestedQuantity } from '../lib/measure'
 import { pendingByCode } from '../lib/compare'
 import { isBefore } from '../lib/format'
+import { businessDayIso } from '../lib/day'
 import type {
   Article,
   BookStockImport,
@@ -366,7 +367,7 @@ export async function buildOrderList(countId: string): Promise<OrderLine[]> {
       minimum: article.kind === 'yes_no' ? 0 : orderThreshold(article, date),
       suggested_order_qty: prev?.suggested_order_qty ?? qty,
       order_unit: prev?.order_unit ?? article.order_unit,
-      for_date: prev?.for_date ?? new Date().toISOString().slice(0, 10),
+      for_date: prev?.for_date ?? businessDayIso(),
       note: noteOf(line.input) || null,
       // Only when set by hand, so finishing a count never touches the column otherwise.
       ...(prev?.payment ? { payment: prev.payment } : {}),
