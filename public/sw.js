@@ -2,7 +2,7 @@
 // Pages: network first (always fresh after a deploy), cached copy as fallback.
 // Built assets (hashed file names): cache first.
 // Only same-origin GETs are touched — database/API calls go straight to the network.
-const CACHE = 'popis-v1'
+const CACHE = 'popis-v2'
 
 self.addEventListener('install', () => self.skipWaiting())
 
