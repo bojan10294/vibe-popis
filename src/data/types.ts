@@ -201,5 +201,39 @@ export interface OrderLine {
   payment?: Payment | null
 }
 
+export type DeliveryStatus = 'in_progress' | 'confirmed'
+
+/** Unos fakture: one invoice / otpremnica entered by a worker. */
+export interface Delivery {
+  id: string
+  created_at: string
+  confirmed_at: string | null
+  user_id: string
+  user_name: string
+  supplier_id: string | null
+  /** Snapshot so history keeps the name. */
+  supplier_name: string | null
+  note: string
+  status: DeliveryStatus
+}
+
+export interface DeliveryLine {
+  id: string
+  delivery_id: string
+  article_id: string
+  article_name: string
+  /** As typed by the worker, in `unit` (e.g. 2 gajba). */
+  qty: number
+  unit: string
+  /** The same amount in the article's counting unit (e.g. 48 kom). */
+  base_qty: number
+  base_unit: string
+  /** 'in' = stiglo, 'return' = vraćamo dobavljaču. */
+  direction: DeliveryDirection
+  created_at?: string
+}
+
+export type DeliveryDirection = 'in' | 'return'
+
 /** 'invoice' = na račun (book and shelf go up), 'cash' = za keš (only the shelf). */
 export type Payment = 'cash' | 'invoice'

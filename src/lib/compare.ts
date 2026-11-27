@@ -2,7 +2,7 @@
 // accountant article. Several of our articles may point to one accountant
 // article (Cedevita flavours → CEDEVITA); their counts are summed.
 
-import type { Article, CountLine, LagerStock } from '../data/types'
+import type { Article, CountLine, DeliveryLine, LagerStock } from '../data/types'
 import { round } from './measure'
 
 export interface CompareMember {
@@ -20,7 +20,12 @@ export interface CompareRow {
   name: string
   /** Accountant's unit as printed (KG, LIT, KOM). */
   unit: string
+  /** What we compare against: the accountant's Stanje + fakture not on SEF yet. */
   book: number
+  /** The accountant's Stanje as printed in the PDF. */
+  bookPdf: number
+  /** Net amount (stiglo − vraćeno) from fakture the accountant doesn't have yet, in their unit. */
+  pending: number
   cena: number
   /** Sum of our counts converted to the accountant's unit; null = nothing counted. */
   counted: number | null
@@ -42,7 +47,28 @@ export function tolerance(unit: string): number {
   return unit.toUpperCase() === 'KOM' ? 0.5 : 0.05
 }
 
-export function compareStock(stock: LagerStock[], articles: Article[], lines: CountLine[]): CompareRow[] {
+/**
+ * Net amount per accountant code from fakture the accountant doesn't have yet
+ * (not on SEF): stiglo adds, vraćeno subtracts, converted to their unit.
+ */
+export function pendingByCode(articles: Article[], deliveryLines: DeliveryLine[]): Map<string, number> {
+  const articleOf = new Map(articles.map((a) => [a.id, a]))
+  const out = new Map<string, number>()
+  for (const l of deliveryLines) {
+    const a = articleOf.get(l.article_id)
+    if (!a?.code) continue
+    const sign = l.direction === 'return' ? -1 : 1
+    out.set(a.code, (out.get(a.code) ?? 0) + sign * l.base_qty * (a.book_factor || 1))
+  }
+  return out
+}
+
+export function compareStock(
+  stock: LagerStock[],
+  articles: Article[],
+  lines: CountLine[],
+  pending: Map<string, number> = new Map(),
+): CompareRow[] {
   const lineOf = new Map(lines.map((l) => [l.article_id, l]))
   const byCode = new Map<string, Article[]>()
   for (const a of articles) {
@@ -63,12 +89,16 @@ export function compareStock(stock: LagerStock[], articles: Article[], lines: Co
     })
     const entered = members.filter((m) => m.counted != null)
     const counted = entered.length ? round(entered.reduce((sum, m) => sum + m.counted! * m.factor, 0)) : null
-    const diff = counted == null ? null : round(counted - s.stanje)
+    const extra = round(pending.get(s.code) ?? 0)
+    const book = round(s.stanje + extra)
+    const diff = counted == null ? null : round(counted - book)
     rows.push({
       code: s.code,
       name: s.name,
       unit: s.unit,
-      book: s.stanje,
+      book,
+      bookPdf: s.stanje,
+      pending: extra,
       cena: s.cena,
       counted,
       diff,

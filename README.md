@@ -34,6 +34,19 @@ Jednom, posle `supabase login` i `supabase link --project-ref <projekat>`:
    (fajl ne ide u git; javni ključ je i u [`src/lib/push.ts`](src/lib/push.ts), moraju se poklapati)
 3. `supabase functions deploy notify-count-finished --no-verify-jwt`
 
+## Unos fakture
+
+Radnik na početnom ekranu bira „Unesi fakturu“, bira dobavljača, pretragom nalazi
+artikle i upisuje koliko je stiglo, pa sve proverava i potvrđuje. Posle potvrde
+stiže obaveštenje „📦 Faktura unesena“ (ista Edge Function kao za popis), a fakture
+se vide u Admin → Fakture.
+
+Jednom:
+
+1. SQL Editor → pokreni [`supabase/migrations/014_deliveries.sql`](supabase/migrations/014_deliveries.sql),
+   pa [`015_delivery_returns.sql`](supabase/migrations/015_delivery_returns.sql) (povrat robe)
+2. `supabase functions deploy notify-count-finished --no-verify-jwt` (nova verzija zna i za fakture)
+
 ## Netlify
 
 Podešavanja builda su u [`netlify.toml`](netlify.toml). U Netlify-u treba dodati

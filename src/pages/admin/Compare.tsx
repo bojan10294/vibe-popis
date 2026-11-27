@@ -1,33 +1,52 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
-import { listArticles, listCounts, listLagerDates, listLagerStock, listLinesForCount } from '../../data/repository'
-import type { Article, Count, CountLine, LagerStock } from '../../data/types'
-import { compareStock, defaultCountFor, tolerance, type CompareRow } from '../../lib/compare'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
+import {
+  listArticles,
+  listCounts,
+  listDeliveries,
+  listDeliveryLines,
+  listDeliveryLinesFor,
+  listLagerDates,
+  listLagerStock,
+  listLinesForCount,
+} from '../../data/repository'
+import type { Article, Count, CountLine, Delivery, DeliveryLine, LagerStock } from '../../data/types'
+import { compareStock, defaultCountFor, pendingByCode, tolerance, type CompareRow } from '../../lib/compare'
 import { bookUnitLabel, isRetired } from '../../lib/lager'
 import { formatNum } from '../../lib/measure'
-import { fmtDateTime } from '../../lib/format'
+import { fmtDateTime, fold } from '../../lib/format'
 import { Card, Select, Spinner, formatMoney } from '../../components/ui'
 
 type Filter = 'diff' | 'all' | 'notCounted' | 'unlinked'
 
 export function Compare() {
   const [params, setParams] = useSearchParams()
+  const imported = (useLocation().state as { imported?: string } | null)?.imported
   const [dates, setDates] = useState<string[]>([])
   const [counts, setCounts] = useState<Count[]>([])
   const [articles, setArticles] = useState<Article[]>([])
   const [stock, setStock] = useState<LagerStock[]>([])
   const [lines, setLines] = useState<CountLine[]>([])
+  const [deliveries, setDeliveries] = useState<Delivery[]>([])
+  const [pendingLines, setPendingLines] = useState<DeliveryLine[]>([])
   const [filter, setFilter] = useState<Filter>('diff')
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   useEffect(() => {
-    Promise.all([listLagerDates(), listCounts(), listArticles()])
-      .then(([d, c, a]) => {
+    Promise.all([
+      listLagerDates(),
+      listCounts(),
+      listArticles(),
+      // The comparison still works before the fakture tables exist.
+      listDeliveries().catch(() => [] as Delivery[]),
+    ])
+      .then(([d, c, a, del]) => {
         setDates(d)
         setCounts(c.filter((x) => x.status === 'finished'))
         setArticles(a)
+        setDeliveries(del.filter((x) => x.status === 'confirmed'))
       })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setLoading(false))
@@ -36,6 +55,18 @@ export function Compare() {
   const date = params.get('date') ?? dates[0] ?? ''
   const countId = params.get('count') ?? (date ? defaultCountFor(counts, date)?.id : counts[0]?.id) ?? ''
   const count = counts.find((c) => c.id === countId)
+  const asking = params.get('ask') === '1'
+  const noSefParam = params.get('nosef') ?? ''
+  const noSef = useMemo(() => new Set(noSefParam.split(',').filter(Boolean)), [noSefParam])
+  // Only fakture entered before the Popis count: those goods were on the shelf when counted.
+  const countedIds = useMemo(
+    () =>
+      [...noSef].filter((id) => {
+        const d = deliveries.find((x) => x.id === id)
+        return d && count && d.created_at < count.datetime
+      }),
+    [noSef, deliveries, count],
+  )
 
   useEffect(() => {
     if (!date) return
@@ -46,15 +77,28 @@ export function Compare() {
     listLinesForCount(countId).then(setLines).catch((e) => setError(String(e)))
   }, [countId])
 
+  useEffect(() => {
+    listDeliveryLinesFor(countedIds).then(setPendingLines).catch((e) => setError(String(e)))
+  }, [countedIds])
+
   const setParam = (k: string, v: string) => {
     const next = new URLSearchParams(params)
-    next.set(k, v)
+    if (v) next.set(k, v)
+    else next.delete(k)
     // A new PDF date picks its own Popis again.
     if (k === 'date') next.delete('count')
     setParams(next, { replace: true })
   }
 
-  const rows = useMemo(() => compareStock(stock, articles, lines), [stock, articles, lines])
+  const pending = useMemo(() => pendingByCode(articles, pendingLines), [articles, pendingLines])
+  const rows = useMemo(() => compareStock(stock, articles, lines, pending), [stock, articles, lines, pending])
+
+  const toggleNoSef = (id: string) => {
+    const next = new Set(noSef)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    setParam('nosef', [...next].join(','))
+  }
   const linkedCodes = useMemo(() => new Set(articles.map((a) => a.code).filter(Boolean)), [articles])
   const unlinked = useMemo(
     () => stock.filter((s) => !linkedCodes.has(s.code) && !isRetired(s) && s.stanje !== 0).sort((a, b) => b.stanje * b.cena - a.stanje * a.cena),
@@ -97,6 +141,7 @@ export function Compare() {
     <div className="space-y-4">
       <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Poređenje sa knjigovodstvom</h1>
 
+      {imported && <Card className="bg-green-50 text-sm text-green-800">{imported}</Card>}
       {error && <Card className="bg-red-50 text-sm text-red-700">{error}</Card>}
 
       {dates.length === 0 ? (
@@ -125,6 +170,15 @@ export function Compare() {
 
       {date && count && (
         <>
+          <NotOnSef
+            deliveries={deliveries}
+            count={count}
+            selected={noSef}
+            asking={asking}
+            onToggle={toggleNoSef}
+            onDone={() => setParam('ask', '')}
+          />
+
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Stat label={`Manjak (${stats.shortN})`} value={`${formatMoney(stats.shortage)} din`} tone="text-red-600" />
             <Stat label={`Višak (${stats.surN})`} value={`${formatMoney(stats.surplus)} din`} tone="text-green-600" />
@@ -210,7 +264,7 @@ export function Compare() {
           )}
 
           <p className="text-xs text-slate-400">
-            Razlika = izbrojano − knjigovodstveno. Manje od {formatNum(tolerance('KOM'))} kom ili{' '}
+            Razlika = izbrojano − (knjigovodstveno + fakture kojih nema kod knjigovođe). Manje od {formatNum(tolerance('KOM'))} kom ili{' '}
             {formatNum(tolerance('KG') * 1000)} g/ml se računa kao „slaže se”. Vrednost = razlika × cena iz lager liste.
           </p>
         </>
@@ -230,7 +284,14 @@ function CompareItem({ row: r }: { row: CompareRow }) {
         <div className="min-w-0">
           <p className="font-medium leading-tight text-slate-800">{r.name}</p>
           <p className="mt-0.5 text-xs text-slate-500">
-            knjig. {formatNum(r.book)} {u} · popis {r.counted == null ? '—' : `${formatNum(r.counted)} ${u}`}
+            knjig. {formatNum(r.bookPdf)} {u}
+            {r.pending !== 0 && (
+              <span className="font-medium text-brand-700">
+                {' '}
+                {r.pending > 0 ? '+' : '−'} {formatNum(Math.abs(r.pending))} sa faktura = {formatNum(r.book)} {u}
+              </span>
+            )}{' '}
+            · popis {r.counted == null ? '—' : `${formatNum(r.counted)} ${u}`}
           </p>
         </div>
         <div className={`shrink-0 text-right ${tone}`}>
@@ -261,6 +322,160 @@ function CompareItem({ row: r }: { row: CompareRow }) {
   )
 }
 
+const SUGGESTED = 5
+
+/**
+ * "Koje fakture knjigovođa još nema?" — the last fakture entered before the
+ * Popis; the checked ones are added to the accountant's Stanje. Fakture
+ * entered after the Popis (e.g. today's delivery) were not on the shelf when
+ * it was counted, so they are listed but never added.
+ */
+function NotOnSef({
+  deliveries,
+  count,
+  selected,
+  asking,
+  onToggle,
+  onDone,
+}: {
+  deliveries: Delivery[]
+  count: Count
+  selected: Set<string>
+  asking: boolean
+  onToggle: (id: string) => void
+  onDone: () => void
+}) {
+  const [open, setOpen] = useState(asking)
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const [linesOf, setLinesOf] = useState<Record<string, DeliveryLine[]>>({})
+  const [showAll, setShowAll] = useState(false)
+
+  useEffect(() => {
+    if (asking) setOpen(true)
+  }, [asking])
+
+  const sorted = [...deliveries].sort((a, b) => b.created_at.localeCompare(a.created_at))
+  const before = sorted.filter((d) => d.created_at < count.datetime)
+  const after = sorted.filter((d) => d.created_at >= count.datetime)
+  const shown = showAll ? before : before.filter((d, i) => i < SUGGESTED || selected.has(d.id))
+  const chosen = before.filter((d) => selected.has(d.id))
+  const label = (d: Delivery) => d.supplier_name ?? 'Bez dobavljača'
+
+  const expand = (id: string) => {
+    setExpanded(expanded === id ? null : id)
+    if (!linesOf[id]) listDeliveryLines(id).then((ls) => setLinesOf((m) => ({ ...m, [id]: ls }))).catch(() => {})
+  }
+
+  if (!open) {
+    return (
+      <Card className="flex items-center justify-between gap-3 text-sm">
+        <p className="text-slate-600">
+          Fakture kojih nema kod knjigovođe:{' '}
+          <strong className="text-slate-800">
+            {chosen.length === 0 ? 'nijedna' : chosen.map((d) => `${label(d)} ${fmtShort(d.created_at)}`).join(', ')}
+          </strong>
+        </p>
+        <button onClick={() => setOpen(true)} className="shrink-0 font-semibold text-brand-700 hover:underline">
+          Promeni
+        </button>
+      </Card>
+    )
+  }
+
+  return (
+    <Card className={`space-y-3 ${asking ? 'border-brand-300 ring-4 ring-brand-500/10' : ''}`}>
+      <div>
+        <p className="font-bold text-slate-900">Koje fakture knjigovođa još nema?</p>
+        <p className="text-sm text-slate-500">
+          Štikliraj one koje nisu stigle na SEF. Dodaju se na knjigovodstveno stanje (stiglo +, vraćeno −). Računaju se
+          samo fakture unete pre popisa od {fmtDateTime(count.datetime)}.
+        </p>
+      </div>
+
+      {before.length === 0 ? (
+        <p className="text-sm text-slate-400">Nema unetih faktura pre ovog popisa.</p>
+      ) : (
+        <div className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200">
+          {shown.map((d) => {
+            const on = selected.has(d.id)
+            const ls = linesOf[d.id]
+            return (
+              <div key={d.id} className={on ? 'bg-brand-50/60' : ''}>
+                <div className="flex items-center gap-3 px-3 py-2.5">
+                  <input
+                    type="checkbox"
+                    checked={on}
+                    onChange={() => onToggle(d.id)}
+                    aria-label={`Nema kod knjigovođe: ${label(d)} ${fmtShort(d.created_at)}`}
+                    className="h-5 w-5 shrink-0 accent-brand-600"
+                  />
+                  <button onClick={() => onToggle(d.id)} className="min-w-0 flex-1 text-left">
+                    <p className="font-medium text-slate-800">
+                      {label(d)} · {fmtDateTime(d.created_at)}
+                    </p>
+                    <p className="truncate text-xs text-slate-500">
+                      {d.user_name}
+                      {d.note ? ` · ${d.note}` : ''}
+                    </p>
+                  </button>
+                  <button
+                    onClick={() => expand(d.id)}
+                    className="shrink-0 rounded-lg px-2 py-1 text-sm font-medium text-brand-700 hover:bg-slate-100"
+                  >
+                    {expanded === d.id ? 'Sakrij' : 'Šta je na njoj'}
+                  </button>
+                </div>
+                {expanded === d.id && (
+                  <ul className="space-y-0.5 pb-2.5 pl-11 pr-3 text-sm">
+                    {!ls && <li className="text-slate-400">Učitavam...</li>}
+                    {ls?.length === 0 && <li className="text-slate-400">Nema stavki.</li>}
+                    {ls?.map((l) => (
+                      <li key={l.id} className="flex justify-between gap-3">
+                        <span className="text-slate-700">{l.article_name}</span>
+                        <span className={`shrink-0 font-medium ${l.direction === 'return' ? 'text-red-600' : 'text-slate-600'}`}>
+                          {l.direction === 'return' ? '↩ ' : ''}
+                          {formatNum(l.qty)} {l.unit}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+      {!showAll && before.length > shown.length && (
+        <button onClick={() => setShowAll(true)} className="text-sm font-medium text-brand-700 hover:underline">
+          Prikaži starije ({before.length - shown.length})
+        </button>
+      )}
+
+      {after.length > 0 && (
+        <p className="text-xs text-slate-400">
+          Ne računa se, uneto posle popisa: {after.map((d) => `${label(d)} ${fmtDateTime(d.created_at)}`).join(', ')}.
+        </p>
+      )}
+
+      <button
+        onClick={() => {
+          setOpen(false)
+          onDone()
+        }}
+        className="w-full rounded-xl bg-brand-600 py-2.5 font-semibold text-white shadow-sm hover:brightness-110"
+      >
+        {chosen.length === 0
+          ? 'Sve su kod knjigovođe, uporedi'
+          : `Dodaj ${chosen.length} ${chosen.length === 1 ? 'fakturu' : 'fakture'} i uporedi`}
+      </button>
+    </Card>
+  )
+}
+
+function fmtShort(iso: string): string {
+  return new Date(iso).toLocaleDateString('sr-RS', { day: '2-digit', month: '2-digit' })
+}
+
 function Stat({ label, value, tone }: { label: string; value: string; tone: string }) {
   return (
     <div className="rounded-2xl border border-slate-200/80 bg-surface p-3 shadow-sm">
@@ -268,15 +483,6 @@ function Stat({ label, value, tone }: { label: string; value: string; tone: stri
       <p className={`text-lg font-bold ${tone}`}>{value}</p>
     </div>
   )
-}
-
-/** Lowercase without Serbian diacritics, so "cokolada" finds "Čokolada". */
-function fold(s: string): string {
-  return s
-    .toLowerCase()
-    .replace(/đ/g, 'd')
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
 }
 
 function fmtDate(iso: string): string {

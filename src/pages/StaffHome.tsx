@@ -1,7 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
-import { createCount, getActiveCountForUser, listArticles } from '../data/repository'
+import {
+  createCount,
+  createDelivery,
+  getActiveCountForUser,
+  getActiveDeliveryForUser,
+  listArticles,
+} from '../data/repository'
 import { Card, Spinner } from '../components/ui'
 import { Fireworks } from '../components/Fireworks'
 import { countedOn } from '../lib/measure'
@@ -10,8 +16,11 @@ export function StaffHome() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  const justFinished = (location.state as { finished?: boolean } | null)?.finished === true
+  const state = location.state as { finished?: boolean; deliveryConfirmed?: boolean } | null
+  const justFinished = state?.finished === true
+  const deliveryConfirmed = state?.deliveryConfirmed === true
   const [activeId, setActiveId] = useState<string | null>(null)
+  const [deliveryId, setDeliveryId] = useState<string | null>(null)
   const [articleCount, setArticleCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [starting, setStarting] = useState(false)
@@ -19,8 +28,12 @@ export function StaffHome() {
   useEffect(() => {
     if (!user) return
     ;(async () => {
-      const active = await getActiveCountForUser(user.id)
+      const [active, delivery] = await Promise.all([
+        getActiveCountForUser(user.id),
+        getActiveDeliveryForUser(user.id),
+      ])
       setActiveId(active?.id ?? null)
+      setDeliveryId(delivery?.id ?? null)
       const arts = await listArticles({ activeOnly: true })
       setArticleCount(arts.filter((a) => countedOn(a, new Date())).length)
       setLoading(false)
@@ -34,6 +47,12 @@ export function StaffHome() {
     setStarting(true)
     const count = await createCount(user)
     navigate(`/count/${count.id}`)
+  }
+
+  const startDelivery = async () => {
+    setStarting(true)
+    const delivery = await createDelivery(user)
+    navigate(`/delivery/${delivery.id}`)
   }
 
   const today = new Date().toLocaleDateString('sr-Latn-RS', { weekday: 'long', day: 'numeric', month: 'long' })
@@ -53,6 +72,13 @@ export function StaffHome() {
         </Card>
       )}
 
+      {deliveryConfirmed && (
+        <Card className="flex items-center gap-3 border-green-200 bg-green-50">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-green-600 text-white">✓</span>
+          <p className="font-medium text-green-800">Faktura je unesena i poslata. Hvala!</p>
+        </Card>
+      )}
+
       <button
         onClick={activeId ? () => navigate(`/count/${activeId}`) : startCount}
         disabled={starting}
@@ -69,6 +95,22 @@ export function StaffHome() {
         <p className="relative mt-3 text-sm text-white/80">
           {activeId ? 'Nastavljaš tačno odakle si stao.' : 'Ideš kategoriju po kategoriju, artikal po artikal.'}
         </p>
+      </button>
+
+      <button
+        onClick={deliveryId ? () => navigate(`/delivery/${deliveryId}`) : startDelivery}
+        disabled={starting}
+        className="flex w-full items-center gap-4 rounded-3xl border border-slate-200 bg-surface p-5 text-left shadow-sm transition active:scale-[0.99] disabled:opacity-70"
+      >
+        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-2xl">📦</span>
+        <span className="min-w-0">
+          <span className="block text-lg font-extrabold text-slate-900">
+            {deliveryId ? 'Nastavi unos fakture →' : 'Unesi fakturu'}
+          </span>
+          <span className="block text-sm text-slate-500">
+            {deliveryId ? 'Imaš nezavršenu fakturu.' : 'Stigla roba ili nešto vraćamo? Upiši ovde.'}
+          </span>
+        </span>
       </button>
     </div>
   )

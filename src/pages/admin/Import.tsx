@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { listArticles, listCategories, listImports, saveLagerImport, type LagerLink } from '../../data/repository'
 import { Button, Card, Input, Select, Spinner } from '../../components/ui'
 import type { Article, BookStockImport, Category } from '../../data/types'
@@ -50,6 +50,7 @@ export function ImportPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState<string | null>(null)
+  const navigate = useNavigate()
   const [imports, setImports] = useState<BookStockImport[]>([])
 
   useEffect(() => {
@@ -145,13 +146,13 @@ export function ImportPage() {
         report.rows.map(({ code, name, unit, ulaz, izlaz, stanje, cena }) => ({ code, name, unit, ulaz, izlaz, stanje, cena })),
         links,
       )
-      setResult(
+      const message =
         `Sačuvano stanje na dan ${formatDate(date)}: ${res.rows} knjigovodstvenih artikala, ${res.linked} naših artikala povezano` +
-          (links.length ? ` (${links.length} veza promenjeno).` : '.') +
-          (res.isLatest ? '' : ' Ovo je stariji PDF — trenutno stanje ostaje iz novijeg.'),
-      )
-      setReport(null)
-      listImports().then(setImports).catch(() => {})
+        (links.length ? ` (${links.length} veza promenjeno).` : '.') +
+        (res.isLatest ? '' : ' Ovo je stariji PDF — trenutno stanje ostaje iz novijeg.')
+      // Straight on to the comparison, which first asks which fakture the accountant doesn't have yet.
+      navigate(`/admin/compare?date=${date}&ask=1`, { state: { imported: message } })
+      return
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       setError(

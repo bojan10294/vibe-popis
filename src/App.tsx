@@ -5,6 +5,7 @@ import { Spinner } from './components/ui'
 import { Login } from './pages/Login'
 import { StaffHome } from './pages/StaffHome'
 import { CountSession } from './pages/CountSession'
+import { DeliverySession } from './pages/DeliverySession'
 import { Dashboard } from './pages/admin/Dashboard'
 import { Counts } from './pages/admin/Counts'
 import { CountDetail } from './pages/admin/CountDetail'
@@ -14,6 +15,7 @@ import { Compare } from './pages/admin/Compare'
 import { Users } from './pages/admin/Users'
 import { OrderList } from './pages/admin/OrderList'
 import { Suppliers } from './pages/admin/Suppliers'
+import { Deliveries, DeliveryDetail } from './pages/admin/Deliveries'
 import type { Role } from './data/types'
 
 function IndexRedirect() {
@@ -51,6 +53,7 @@ function AppRoutes() {
       {/* Staff */}
       <Route path="/count" element={<RequireRole role="staff"><StaffHome /></RequireRole>} />
       <Route path="/count/:id" element={<RequireRole role="staff"><CountSession /></RequireRole>} />
+      <Route path="/delivery/:id" element={<RequireRole role="staff"><DeliverySession /></RequireRole>} />
 
       {/* Admin */}
       <Route path="/admin" element={<RequireRole role="admin"><Dashboard /></RequireRole>} />
@@ -60,6 +63,8 @@ function AppRoutes() {
       <Route path="/admin/suppliers" element={<RequireRole role="admin"><Suppliers /></RequireRole>} />
       <Route path="/admin/import" element={<RequireRole role="admin"><ImportPage /></RequireRole>} />
       <Route path="/admin/compare" element={<RequireRole role="admin"><Compare /></RequireRole>} />
+      <Route path="/admin/deliveries" element={<RequireRole role="admin"><Deliveries /></RequireRole>} />
+      <Route path="/admin/deliveries/:id" element={<RequireRole role="admin"><DeliveryDetail /></RequireRole>} />
       <Route path="/admin/users" element={<RequireRole role="admin"><Users /></RequireRole>} />
       <Route path="/admin/orders" element={<RequireRole role="admin"><OrderList /></RequireRole>} />
       <Route path="/admin/orders/:countId" element={<RequireRole role="admin"><OrderList /></RequireRole>} />

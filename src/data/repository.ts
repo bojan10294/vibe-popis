@@ -8,6 +8,8 @@ import type {
   Count,
   CountInput,
   CountLine,
+  Delivery,
+  DeliveryLine,
   LagerArticle,
   LagerStock,
   OrderLine,
@@ -390,4 +392,92 @@ export async function deleteOrderLine(id: string): Promise<void> {
 
 export async function setOrderStatus(id: string, status: OrderStatus): Promise<void> {
   await run(sb().from('order_lines').update({ order_status: status }).eq('id', id))
+}
+
+// ---------------------------------------------------------------------------
+// Unos fakture (deliveries)
+// ---------------------------------------------------------------------------
+
+export async function listDeliveries(): Promise<Delivery[]> {
+  return run<Delivery[]>(sb().from('deliveries').select('*').order('created_at', { ascending: false }))
+}
+
+export async function getDelivery(id: string): Promise<Delivery | undefined> {
+  const row = await run<Delivery | null>(sb().from('deliveries').select('*').eq('id', id).maybeSingle())
+  return row ?? undefined
+}
+
+export async function getActiveDeliveryForUser(userId: string): Promise<Delivery | undefined> {
+  const row = await run<Delivery | null>(
+    sb().from('deliveries').select('*').eq('status', 'in_progress').eq('user_id', userId)
+      .order('created_at', { ascending: false }).limit(1).maybeSingle(),
+  )
+  return row ?? undefined
+}
+
+export async function createDelivery(user: User): Promise<Delivery> {
+  const delivery: Delivery = {
+    id: uuid(),
+    created_at: new Date().toISOString(),
+    confirmed_at: null,
+    user_id: user.id,
+    user_name: user.name,
+    supplier_id: null,
+    supplier_name: null,
+    note: '',
+    status: 'in_progress',
+  }
+  await run(sb().from('deliveries').insert(delivery))
+  return delivery
+}
+
+export async function setDeliverySupplier(id: string, supplier: Supplier | null): Promise<void> {
+  await run(
+    sb().from('deliveries').update({ supplier_id: supplier?.id ?? null, supplier_name: supplier?.name ?? null }).eq('id', id),
+  )
+}
+
+export async function listDeliveryLines(deliveryId: string): Promise<DeliveryLine[]> {
+  return run<DeliveryLine[]>(
+    sb().from('delivery_lines').select('*').eq('delivery_id', deliveryId).order('created_at', { ascending: true }),
+  )
+}
+
+/**
+ * One line per article and direction (stiglo / vraćamo): entering the same
+ * article again in the same direction replaces its amount.
+ */
+export async function saveDeliveryLine(line: Omit<DeliveryLine, 'id'>): Promise<DeliveryLine> {
+  const existing = await run<{ id: string } | null>(
+    sb().from('delivery_lines').select('id')
+      .eq('delivery_id', line.delivery_id).eq('article_id', line.article_id).eq('direction', line.direction)
+      .maybeSingle(),
+  )
+  const row: DeliveryLine = { ...line, id: existing?.id ?? uuid() }
+  await run(sb().from('delivery_lines').upsert(row))
+  return row
+}
+
+/** Lines of several fakture at once (for the comparison). */
+export async function listDeliveryLinesFor(deliveryIds: string[]): Promise<DeliveryLine[]> {
+  if (!deliveryIds.length) return []
+  return run<DeliveryLine[]>(sb().from('delivery_lines').select('*').in('delivery_id', deliveryIds))
+}
+
+export async function deleteDeliveryLine(id: string): Promise<void> {
+  await run(sb().from('delivery_lines').delete().eq('id', id))
+}
+
+/** After the worker checked the list: marks it confirmed and tells the admins. */
+export async function confirmDelivery(id: string, note: string): Promise<void> {
+  await run(
+    sb().from('deliveries').update({ status: 'confirmed', confirmed_at: new Date().toISOString(), note }).eq('id', id),
+  )
+  // Never blocks or fails the confirmation.
+  void sb().functions.invoke('notify-count-finished', { body: { delivery_id: id } }).catch(() => {})
+}
+
+/** Its lines go with it (FK on delete cascade). */
+export async function deleteDelivery(id: string): Promise<void> {
+  await run(sb().from('deliveries').delete().eq('id', id))
 }

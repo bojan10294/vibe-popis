@@ -14,6 +14,7 @@ const adminNav: NavItem[] = [
   { to: '/admin', label: 'Pregled', end: true },
   { to: '/admin/orders', label: 'Nabavka' },
   { to: '/admin/counts', label: 'Popisi' },
+  { to: '/admin/deliveries', label: 'Fakture' },
   { to: '/admin/articles', label: 'Artikli' },
   { to: '/admin/suppliers', label: 'Dobavljači' },
   { to: '/admin/import', label: 'Knjigovodstvo' },
