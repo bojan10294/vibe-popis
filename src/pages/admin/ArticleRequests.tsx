@@ -50,7 +50,7 @@ export function ArticleRequests({ onChange }: { onChange?: (pending: number) => 
 
   return (
     <section id="zahtevi" className="scroll-mt-28 space-y-2">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-brand-600">
+      <h2 className="eyebrow text-brand-700">
         🆕 Novi artikli za potvrdu ({requests.length})
       </h2>
       {requests.map((r) => (

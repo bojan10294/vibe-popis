@@ -2,13 +2,15 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react'
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger'
 
-// Solid buttons darken via brightness, not a darker shade: the shade scale is
+// Solid buttons shift via brightness, not a different shade: the shade scale is
 // remapped in dark mode (see index.css), brightness works in both themes.
 const variants: Record<Variant, string> = {
-  primary: 'bg-brand-600 text-white shadow-sm shadow-brand-600/30 hover:brightness-110',
-  secondary: 'bg-surface text-brand-700 border border-slate-200 shadow-sm hover:bg-slate-50',
-  ghost: 'bg-transparent text-slate-600 hover:bg-slate-100',
-  danger: 'bg-red-600 text-white shadow-sm shadow-red-600/30 hover:brightness-110',
+  primary:
+    'bg-brand-600 text-on-brand border border-black/10 shadow-[inset_0_1px_0_rgb(255_255_255/0.5)] hover:-translate-y-px hover:brightness-105 hover:shadow-[inset_0_1px_0_rgb(255_255_255/0.5),0_0_0_4px_rgb(212_245_74/0.28)]',
+  secondary: 'bg-surface text-slate-800 border border-slate-200 shadow-sm hover:-translate-y-px hover:bg-slate-50',
+  ghost: 'bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+  danger:
+    'bg-red-600 text-white border border-black/10 shadow-[inset_0_1px_0_rgb(255_255_255/0.25)] hover:-translate-y-px hover:brightness-110',
 }
 
 export function Button({
@@ -19,7 +21,7 @@ export function Button({
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant }) {
   return (
     <button
-      className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-base font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100 ${variants[variant]} ${className}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-base font-semibold tracking-tight active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100 ${variants[variant]} ${className}`}
       {...rest}
     >
       {children}
@@ -27,9 +29,18 @@ export function Button({
   )
 }
 
-export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
+/** `interactive` for cards that are (inside) a link or button: they lift and glow on hover. */
+export function Card({
+  children,
+  className = '',
+  interactive = false,
+}: {
+  children: ReactNode
+  className?: string
+  interactive?: boolean
+}) {
   return (
-    <div className={`rounded-2xl border border-slate-200/80 bg-surface p-4 shadow-sm shadow-slate-900/[0.03] ${className}`}>
+    <div className={`rounded-2xl border border-slate-200 bg-surface p-4 shadow-sm ${interactive ? 'lift' : ''} ${className}`}>
       {children}
     </div>
   )
@@ -44,14 +55,14 @@ export function Field({
 }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-sm font-medium text-slate-600">{label}</span>
+      <span className="eyebrow mb-1.5 block text-slate-500">{label}</span>
       {children}
     </label>
   )
 }
 
 const control =
-  'w-full rounded-xl border border-slate-200 bg-surface px-3.5 py-2.5 text-base text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15'
+  'w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-base text-slate-800 shadow-[inset_0_1px_2px_rgb(0_0_0/0.04)] outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-brand-500 focus:bg-surface focus:ring-4 focus:ring-brand-500/20'
 
 export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return <input className={control} {...props} />
@@ -63,16 +74,22 @@ export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
 
 export function Spinner() {
   return (
-    <div className="flex h-40 items-center justify-center text-slate-400">
-      <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-brand-500" />
+    <div className="flex h-40 items-center justify-center gap-1.5" role="status" aria-label="Učitavam">
+      {[0, 1, 2].map((i) => (
+        <span
+          key={i}
+          className="h-2 w-2 animate-bounce rounded-full bg-brand-500"
+          style={{ animationDelay: `${i * 0.12}s` }}
+        />
+      ))}
     </div>
   )
 }
 
 export function EmptyState({ title, hint }: { title: string; hint?: string }) {
   return (
-    <div className="rounded-2xl border border-dashed border-slate-300 bg-surface/60 p-8 text-center">
-      <p className="font-medium text-slate-700">{title}</p>
+    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
+      <p className="font-display text-lg font-semibold tracking-tight text-slate-700">{title}</p>
       {hint && <p className="mt-1 text-sm text-slate-400">{hint}</p>}
     </div>
   )
@@ -86,13 +103,13 @@ export function Badge({
   tone?: 'slate' | 'green' | 'red' | 'amber'
 }) {
   const tones = {
-    slate: 'bg-slate-100 text-slate-600',
-    green: 'bg-green-100 text-green-700',
-    red: 'bg-red-100 text-red-700',
-    amber: 'bg-amber-100 text-amber-700',
+    slate: 'bg-slate-100 text-slate-600 border-slate-200',
+    green: 'bg-green-50 text-green-700 border-green-200',
+    red: 'bg-red-50 text-red-700 border-red-200',
+    amber: 'bg-amber-50 text-amber-700 border-amber-200',
   }
   return (
-    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${tones[tone]}`}>
+    <span className={`eyebrow inline-flex items-center gap-1 rounded-md border px-2 py-0.5 ${tones[tone]}`}>
       {children}
     </span>
   )
@@ -108,10 +125,10 @@ export function ThemeSwitch({ theme, onToggle }: { theme: 'light' | 'dark'; onTo
       aria-checked={dark}
       aria-label={dark ? 'Uključi svetlu temu' : 'Uključi tamnu temu'}
       title={dark ? 'Svetla tema' : 'Tamna tema'}
-      className="relative flex h-8 w-14 shrink-0 items-center rounded-full border border-slate-200 bg-slate-100 p-0.5 transition-colors"
+      className="relative flex h-8 w-14 shrink-0 items-center rounded-full border border-slate-200 bg-slate-100 p-0.5 shadow-[inset_0_1px_2px_rgb(0_0_0/0.08)] hover:border-slate-300"
     >
       <span
-        className={`flex h-6 w-6 items-center justify-center rounded-full bg-surface text-slate-700 shadow transition-transform duration-200 ${
+        className={`flex h-6 w-6 items-center justify-center rounded-full bg-surface text-slate-700 shadow-sm transition-transform duration-300 ease-[cubic-bezier(0.3,1.4,0.5,1)] ${
           dark ? 'translate-x-6' : ''
         }`}
       >

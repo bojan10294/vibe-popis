@@ -202,19 +202,19 @@ export function DeliverySession({ admin = false }: { admin?: boolean } = {}) {
     <>
       {arrived.length > 0 && (
         <section className="space-y-1.5">
-          <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Stiglo ({arrived.length})</h2>
+          <h2 className="px-1 eyebrow text-slate-400">Stiglo ({arrived.length})</h2>
           <LineList lines={arrived} onEdit={editLine} onRemove={removeLine} />
         </section>
       )}
       {returned.length > 0 && (
         <section className="space-y-1.5">
-          <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-red-500">↩ Vraćamo ({returned.length})</h2>
+          <h2 className="px-1 eyebrow text-red-500">↩ Vraćamo ({returned.length})</h2>
           <LineList lines={returned} onEdit={editLine} onRemove={removeLine} />
         </section>
       )}
       {requests.length > 0 && (
         <section className="space-y-1.5">
-          <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-brand-600">
+          <h2 className="px-1 eyebrow text-brand-700">
             🆕 Novi artikli, čekaju potvrdu ({requests.length})
           </h2>
           <div className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-surface">
@@ -246,7 +246,7 @@ export function DeliverySession({ admin = false }: { admin?: boolean } = {}) {
     return (
       <div className="space-y-4 pb-28">
         <div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Proveri fakturu</h1>
+          <h1 className="text-3xl font-extrabold text-slate-900">Proveri fakturu</h1>
           <p className="text-sm text-slate-500">
             {delivery.supplier_name ? `${delivery.supplier_name} · ` : ''}
             Uporedi sa papirom. Dodirni stavku da je ispraviš.
@@ -284,7 +284,7 @@ export function DeliverySession({ admin = false }: { admin?: boolean } = {}) {
   return (
     <div className="space-y-4 pb-28">
       <div>
-        <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">{admin ? 'Izmena fakture' : 'Unos fakture'}</h1>
+        <h1 className="text-3xl font-extrabold text-slate-900">{admin ? 'Izmena fakture' : 'Unos fakture'}</h1>
         <p className="text-sm text-slate-500">
           {admin
             ? `${delivery.user_name} · dodirni stavku da je ispraviš, ✕ da je obrišeš, pretragom dodaj novu.`
@@ -293,7 +293,7 @@ export function DeliverySession({ admin = false }: { admin?: boolean } = {}) {
       </div>
 
       <div className="space-y-1.5">
-        <p className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Dobavljač</p>
+        <p className="px-1 eyebrow text-slate-400">Dobavljač</p>
         <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
           {suppliers.map((s) => {
             const on = delivery.supplier_id === s.id
@@ -303,7 +303,7 @@ export function DeliverySession({ admin = false }: { admin?: boolean } = {}) {
                 onClick={() => chooseSupplier(on ? null : s)}
                 className={`whitespace-nowrap rounded-full border px-3.5 py-1.5 text-sm font-semibold transition-colors ${
                   on
-                    ? 'border-transparent bg-slate-900 text-white dark:bg-brand-600'
+                    ? 'border-transparent bg-ink text-on-ink'
                     : 'border-slate-200 bg-surface text-slate-600 hover:bg-slate-50'
                 }`}
               >
@@ -350,7 +350,7 @@ export function DeliverySession({ admin = false }: { admin?: boolean } = {}) {
                     )}
                   </span>
                 ) : (
-                  <span className="shrink-0 text-lg font-bold text-brand-600">+</span>
+                  <span className="shrink-0 text-lg font-bold text-brand-700">+</span>
                 )}
               </button>
             )
@@ -444,7 +444,7 @@ function NewArticleSheet({
   }
 
   return (
-    <div className="fixed inset-0 z-20 flex items-end justify-center bg-slate-900/40" onClick={onCancel}>
+    <div className="fixed inset-0 z-20 flex items-end justify-center bg-black/45 backdrop-blur-sm" onClick={onCancel}>
       <form
         onClick={(e) => e.stopPropagation()}
         onSubmit={(e) => {
@@ -454,7 +454,7 @@ function NewArticleSheet({
         className="w-full max-w-5xl space-y-3 rounded-t-3xl bg-surface p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl"
       >
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">Novi artikal</p>
+          <p className="eyebrow text-brand-700">Novi artikal</p>
           <p className="text-sm text-slate-500">Admin dobija obaveštenje i potvrđuje ga. Do tada stoji kao „čeka potvrdu”.</p>
         </div>
         <input
@@ -608,14 +608,14 @@ function AmountSheet({
   }
 
   return (
-    <div className="fixed inset-0 z-20 flex items-end justify-center bg-slate-900/40" onClick={onCancel}>
+    <div className="fixed inset-0 z-20 flex items-end justify-center bg-black/45 backdrop-blur-sm" onClick={onCancel}>
       <div
         className="w-full max-w-5xl rounded-t-3xl bg-surface p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <Card className="space-y-4 border-0 p-0 shadow-none">
           <div>
-            <p className={`text-xs font-semibold uppercase tracking-wide ${isReturn ? 'text-red-500' : 'text-slate-400'}`}>
+            <p className={`eyebrow ${isReturn ? 'text-red-500' : 'text-slate-400'}`}>
               {isReturn ? 'Koliko vraćamo?' : 'Koliko je stiglo?'}
             </p>
             <p className="text-lg font-bold text-slate-900">{article.name}</p>
@@ -668,7 +668,7 @@ function AmountSheet({
                       type="button"
                       onClick={() => setUnitIndex(i)}
                       className={`px-3.5 text-base font-semibold ${
-                        i === unitIndex ? 'bg-slate-900 text-white dark:bg-brand-600' : 'bg-surface text-slate-600'
+                        i === unitIndex ? 'bg-ink text-on-ink' : 'bg-surface text-slate-600'
                       }`}
                     >
                       {o.unit}

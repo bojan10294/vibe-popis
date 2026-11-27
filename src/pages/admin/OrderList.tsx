@@ -194,7 +194,7 @@ export function OrderList() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Lista nabavke</h1>
+          <h1 className="text-3xl font-extrabold text-slate-900">Lista nabavke</h1>
           <p className="text-sm text-slate-500">
             Popis <Link to={`/admin/counts/${count.id}`} className="text-brand-700 hover:underline">{fmtDateTime(count.datetime)}</Link>{' '}
             · {count.user_name} · {orders.length} artikala · {cashCount} za keš
@@ -245,7 +245,7 @@ export function OrderList() {
                 return (
                   <div key={p} className="border-t border-slate-100 first:border-t-0">
                     <p
-                      className={`px-3 py-1 text-[11px] font-semibold uppercase tracking-wide ${
+                      className={`px-3 py-1 eyebrow ${
                         p === 'cash' ? 'bg-amber-50 text-amber-700' : 'bg-slate-50 text-slate-500'
                       }`}
                     >

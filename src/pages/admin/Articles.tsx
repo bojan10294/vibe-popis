@@ -155,7 +155,7 @@ export function Articles() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Artikli ({articles.length})</h1>
+        <h1 className="text-3xl font-extrabold text-slate-900">Artikli ({articles.length})</h1>
         <div className="flex gap-2">
           <Button variant="secondary" onClick={() => setCatForm({ id: null, name: '' })} className="text-sm">+ Kategorija</Button>
           <Button onClick={() => newArticle(categories[0]?.id ?? null)} className="text-sm">+ Artikal</Button>
@@ -181,7 +181,7 @@ export function Articles() {
       {sections.map((s, si) => (
         <section key={s.id} className="space-y-2">
           <div className="flex items-center justify-between gap-2 border-b border-slate-200 pb-1">
-            <h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">
+            <h2 className="eyebrow text-slate-600">
               {s.category?.name ?? 'Bez kategorije'}{' '}
               <span className="font-normal text-slate-400">({s.articles.length})</span>
             </h2>
@@ -476,7 +476,7 @@ function ArticleEditor({
   const minUnit = unitLabel(draft)
 
   return (
-    <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/40 sm:items-center" onClick={onClose}>
+    <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/45 backdrop-blur-sm sm:items-center" onClick={onClose}>
       <div
         className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-surface p-5 shadow-xl sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}

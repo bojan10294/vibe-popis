@@ -142,7 +142,7 @@ export function Compare() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Poređenje sa knjigovodstvom</h1>
+        <h1 className="text-3xl font-extrabold text-slate-900">Poređenje sa knjigovodstvom</h1>
         {date && count && rows.length > 0 && (
           <button
             onClick={() =>
@@ -226,7 +226,7 @@ export function Compare() {
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className={`rounded-full px-3 py-1 text-sm font-medium ${filter === f ? 'bg-slate-800 text-white dark:bg-brand-600' : 'bg-slate-100 text-slate-600'}`}
+                className={`rounded-full px-3 py-1 text-sm font-medium ${filter === f ? 'bg-ink text-on-ink' : 'bg-slate-100 text-slate-600'}`}
               >
                 {label}
               </button>
@@ -492,7 +492,7 @@ function NotOnSef({
           setOpen(false)
           onDone()
         }}
-        className="w-full rounded-xl bg-brand-600 py-2.5 font-semibold text-white shadow-sm hover:brightness-110"
+        className="w-full rounded-xl border border-black/10 bg-brand-600 py-2.5 font-semibold text-on-brand shadow-sm hover:-translate-y-px hover:brightness-105"
       >
         {chosen.length === 0
           ? 'Sve su kod knjigovođe, uporedi'
@@ -508,9 +508,9 @@ function fmtShort(iso: string): string {
 
 function Stat({ label, value, tone }: { label: string; value: string; tone: string }) {
   return (
-    <div className="rounded-2xl border border-slate-200/80 bg-surface p-3 shadow-sm">
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className={`text-lg font-bold ${tone}`}>{value}</p>
+    <div className="rounded-2xl border border-slate-200 bg-surface p-3.5 shadow-sm">
+      <p className="eyebrow text-slate-500">{label}</p>
+      <p className={`num mt-2 text-lg font-semibold tracking-tight ${tone}`}>{value}</p>
     </div>
   )
 }

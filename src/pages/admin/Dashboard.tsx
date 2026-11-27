@@ -110,29 +110,54 @@ export function Dashboard() {
 
   return (
     <div className="space-y-5">
-      <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Pregled</h1>
+      <h1 className="text-3xl font-extrabold text-slate-900">Pregled</h1>
 
       <ArticleRequests onChange={onRequests} />
 
       {last && (
-        <Link to="/admin/orders" className="block">
-          <Card className="border-brand-200 bg-brand-50 hover:bg-brand-100">
-            <p className="text-sm text-brand-700">Poslednji popis: {fmtDateTime(last.datetime)} · {last.user_name}</p>
-            <p className="mt-1 text-2xl font-bold text-brand-800">{orderLineCount ?? 0} artikala na listi nabavke →</p>
-            {totals && (
-              <p className="mt-1 text-sm">
-                <span className="font-semibold text-red-600">manjak {formatMoney(totals.shortage)} din</span>
-                {' · '}
-                <span className="font-semibold text-green-600">višak {formatMoney(totals.surplus)} din</span>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Link
+            to="/admin/orders"
+            className="tile-obsidian group col-span-2 row-span-2 flex min-h-52 flex-col justify-between rounded-3xl p-5 hover:-translate-y-0.5"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <p className="eyebrow text-white/55">Lista nabavke</p>
+              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-600 font-bold text-on-brand transition-transform duration-300 group-hover:translate-x-1">
+                →
+              </span>
+            </div>
+            <div>
+              <p className="num text-6xl font-semibold leading-none tracking-[-0.06em] text-[#d4f54a]">{orderLineCount ?? 0}</p>
+              <p className="mt-2 font-display text-xl font-bold tracking-tight">artikala za nabavku</p>
+              <p className="num mt-1 text-xs text-white/50">
+                popis {fmtDateTime(last.datetime)} · {last.user_name}
               </p>
-            )}
-          </Card>
-        </Link>
+            </div>
+          </Link>
+          <Link to="/admin/compare" className="col-span-1 sm:col-span-2">
+            <Card interactive className="flex h-full flex-col justify-between gap-4">
+              <p className="eyebrow text-red-600">▼ Manjak</p>
+              <p className="num text-2xl font-semibold tracking-tight text-slate-900">
+                {totals ? formatMoney(totals.shortage) : '—'}
+                <span className="ml-1 text-xs font-medium text-slate-400">din</span>
+              </p>
+            </Card>
+          </Link>
+          <Link to="/admin/compare" className="col-span-1 sm:col-span-2">
+            <Card interactive className="flex h-full flex-col justify-between gap-4">
+              <p className="eyebrow text-green-700">▲ Višak</p>
+              <p className="num text-2xl font-semibold tracking-tight text-slate-900">
+                {totals ? formatMoney(totals.surplus) : '—'}
+                <span className="ml-1 text-xs font-medium text-slate-400">din</span>
+              </p>
+            </Card>
+          </Link>
+        </div>
       )}
 
       <section>
         <div className="mb-2 flex items-end justify-between">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Fakture danas</h2>
+          <h2 className="eyebrow text-slate-500">Fakture danas</h2>
           <Link to="/admin/deliveries" className="text-sm text-brand-700 hover:underline">
             Sve fakture →
           </Link>
@@ -147,12 +172,11 @@ export function Dashboard() {
                 <Link
                   key={d.id}
                   to={`/admin/deliveries/${d.id}`}
-                  className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-surface p-3 hover:bg-slate-50"
+                  className="lift flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-surface p-3 shadow-sm"
                 >
                   <div className="min-w-0">
-                    <p className="font-medium text-slate-800">
-                      {d.supplier_name ?? 'Bez dobavljača'} · {fmtDateTime(d.confirmed_at ?? d.created_at)}
-                    </p>
+                    <p className="font-semibold text-slate-800">{d.supplier_name ?? 'Bez dobavljača'}</p>
+                    <p className="num text-xs text-slate-500">{fmtDateTime(d.confirmed_at ?? d.created_at)}</p>
                     <p className="truncate text-sm text-slate-500">{d.user_name}</p>
                   </div>
                   {d.status === 'in_progress' ? (
@@ -172,7 +196,7 @@ export function Dashboard() {
       <PushCard />
 
       <section>
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">Popisi u toku</h2>
+        <h2 className="mb-2 eyebrow text-slate-500">Popisi u toku</h2>
         {active.length === 0 ? (
           <EmptyState title="Niko trenutno ne radi popis" />
         ) : (
@@ -181,7 +205,7 @@ export function Dashboard() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">Završeni popisi</h2>
+        <h2 className="mb-2 eyebrow text-slate-500">Završeni popisi</h2>
         {finished.length === 0 ? (
           <EmptyState title="Još nema završenih popisa" hint="Radnik pokreće popis sa svog naloga." />
         ) : (

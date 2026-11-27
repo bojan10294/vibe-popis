@@ -90,7 +90,7 @@ export function CountDetail() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Popis {fmtDateTime(count.datetime)}</h1>
+          <h1 className="text-3xl font-extrabold text-slate-900">Popis {fmtDateTime(count.datetime)}</h1>
           <p className="text-sm text-slate-500">
             Radio: <strong className="text-slate-700">{count.user_name}</strong>
             {count.finished_at && <> · završeno {fmtDateTime(count.finished_at)}</>}
@@ -111,7 +111,7 @@ export function CountDetail() {
             </Link>
             <Link
               to={`/admin/orders/${count.id}`}
-              className="rounded-xl bg-brand-600 px-4 py-2.5 font-medium text-white hover:bg-brand-700"
+              className="rounded-xl border border-black/10 bg-brand-600 px-4 py-2.5 font-semibold text-on-brand shadow-sm hover:-translate-y-px hover:brightness-105"
             >
               Lista nabavke ({orderCount})
             </Link>
@@ -151,7 +151,7 @@ export function CountDetail() {
 
       {groups.map((g) => (
         <section key={g.name} className="space-y-1.5">
-          <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">{g.name}</h2>
+          <h2 className="px-1 eyebrow text-slate-400">{g.name}</h2>
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-surface">
             <table className="w-full text-sm">
               <tbody>

@@ -70,7 +70,7 @@ export function Users() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Zaposleni</h1>
+      <h1 className="text-3xl font-extrabold text-slate-900">Zaposleni</h1>
 
       <Card className="space-y-3">
         <p className="text-sm font-semibold text-slate-600">Novi nalog</p>
