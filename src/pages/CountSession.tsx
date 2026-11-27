@@ -316,7 +316,7 @@ export function CountSession() {
           <p className="eyebrow text-slate-400">{group.name}</p>
           <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200">
             <div
-              className="h-full rounded-full bg-brand-500 shadow-[0_0_12px_rgb(212_245_74/0.6)] transition-all duration-500"
+              className="h-full rounded-full bg-brand-500 shadow-[0_0_12px_rgb(61_92_255/0.5)] transition-all duration-500"
               style={{ width: `${(filled / group.articles.length) * 100}%` }}
             />
           </div>
