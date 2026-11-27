@@ -17,6 +17,7 @@ import { compareStock, compareTotals, defaultCountFor, pendingByCode, tolerance,
 import { bookUnitLabel, isRetired } from '../../lib/lager'
 import { formatNum } from '../../lib/measure'
 import { fmtDateTime, fold, isBefore } from '../../lib/format'
+import { downloadCsv } from '../../lib/csv'
 import { Card, Select, Spinner, formatMoney } from '../../components/ui'
 
 type Filter = 'diff' | 'all' | 'notCounted' | 'unlinked'
@@ -140,7 +141,35 @@ export function Compare() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Poređenje sa knjigovodstvom</h1>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Poređenje sa knjigovodstvom</h1>
+        {date && count && rows.length > 0 && (
+          <button
+            onClick={() =>
+              downloadCsv(
+                `poredjenje-${date}.csv`,
+                ['Šifra', 'Artikal', 'Jedinica', 'Knjigovođa', 'Fakture van SEF-a', 'Knjigovodstveno ukupno', 'Popis', 'Razlika', 'Cena', 'Vrednost razlike', 'Status'],
+                rows.map((r) => [
+                  r.code,
+                  r.name,
+                  bookUnitLabel(r.unit),
+                  r.bookPdf,
+                  r.pending || null,
+                  r.book,
+                  r.counted,
+                  r.diff,
+                  r.cena,
+                  r.value,
+                  r.counted == null ? 'nije brojano' : r.ok ? 'slaže se' : (r.diff ?? 0) < 0 ? 'manjak' : 'višak',
+                ]),
+              )
+            }
+            className="rounded-xl border border-slate-200 bg-surface px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            ⬇ Excel
+          </button>
+        )}
+      </div>
 
       {imported && <Card className="bg-green-50 text-sm text-green-800">{imported}</Card>}
       {error && <Card className="bg-red-50 text-sm text-red-700">{error}</Card>}

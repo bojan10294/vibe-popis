@@ -1,6 +1,8 @@
 // Sends push notifications to every admin phone that turned notifications on:
 //   { count_id }     "popis završen"   — right after a count is finished
 //   { delivery_id }  "faktura unesena" — right after a worker confirms a delivery
+//                    (with what was ordered but didn't arrive)
+//   { article_request_id }  "novi artikal" — a worker asked for an article that isn't on the list
 //
 // Deploy:  supabase functions deploy notify-count-finished --no-verify-jwt
 // Secrets: supabase secrets set --env-file supabase/.env.push.local
@@ -38,7 +40,8 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}))
   const countId = typeof body?.count_id === 'string' ? body.count_id : null
   const deliveryId = typeof body?.delivery_id === 'string' ? body.delivery_id : null
-  if (!token || (!countId && !deliveryId)) return json({ error: 'bad request' }, 400)
+  const requestId = typeof body?.article_request_id === 'string' ? body.article_request_id : null
+  if (!token || (!countId && !deliveryId && !requestId)) return json({ error: 'bad request' }, 400)
 
   const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
     auth: { persistSession: false },
@@ -52,7 +55,11 @@ Deno.serve(async (req) => {
     .maybeSingle()
   if (!session) return json({ error: 'not allowed' }, 401)
 
-  const built = countId ? await countPayload(db, countId) : await deliveryPayload(db, deliveryId!)
+  const built = countId
+    ? await countPayload(db, countId)
+    : deliveryId
+      ? await deliveryPayload(db, deliveryId)
+      : await requestPayload(db, requestId!)
   if ('error' in built) return json({ error: built.error }, 500)
   if (!built.payload) return json({ sent: 0, reason: 'already sent or not finished' })
 
@@ -98,7 +105,8 @@ async function deliveryPayload(db: SupabaseClient, deliveryId: string): Promise<
     .eq('id', deliveryId)
     .eq('status', 'confirmed')
     .is('notified_at', null)
-    .select('id, user_name, supplier_name')
+    // '*' so it also works before migration 017 added order_check.
+    .select('*')
     .maybeSingle()
   if (error) return { error: error.message }
   if (!delivery) return { payload: null }
@@ -107,18 +115,57 @@ async function deliveryPayload(db: SupabaseClient, deliveryId: string): Promise<
   const returned = (lines ?? []).filter((l) => l.direction === 'return').length
   const arrived = (lines ?? []).length - returned
 
+  // Naručeno vs stiglo, computed by the app when the faktura was confirmed.
+  type Check = { lines?: { name: string; status: string; arrivedBase: number; orderedBase: number; baseUnit: string }[] }
+  const missing = ((delivery.order_check as Check | null)?.lines ?? []).filter(
+    (l) => l.status === 'missing' || l.status === 'short',
+  )
+  const num = (n: number) => String(Math.round(n * 1000) / 1000).replace('.', ',')
+
   const parts = [
     delivery.user_name,
     delivery.supplier_name,
     arrived ? `${arrived} ${plural(arrived)}` : null,
     returned ? `↩ ${returned} vraćeno` : null,
   ].filter(Boolean)
+  const missingText = missing.length
+    ? `\nNije stiglo: ${missing.map((l) => `${l.name} (${num(l.arrivedBase)} od ${num(l.orderedBase)} ${l.baseUnit})`).join(', ')}`
+    : ''
   return {
     payload: {
-      title: '📦 Faktura unesena',
-      body: parts.join(' · '),
+      title: missing.length ? `📦 Faktura unesena · ⚠ fali ${missing.length}` : '📦 Faktura unesena',
+      body: parts.join(' · ') + missingText,
       url: `/admin/deliveries/${deliveryId}`,
       tag: `delivery-${deliveryId}`,
+    },
+  }
+}
+
+async function requestPayload(db: SupabaseClient, requestId: string): Promise<Built> {
+  // Claim the request: one push per new article.
+  const { data: r, error } = await db
+    .from('article_requests')
+    .update({ notified_at: new Date().toISOString() })
+    .eq('id', requestId)
+    .eq('status', 'pending')
+    .is('notified_at', null)
+    .select('id, name, user_name, qty, unit, supplier_id')
+    .maybeSingle()
+  if (error) return { error: error.message }
+  if (!r) return { payload: null }
+
+  let supplier: string | null = null
+  if (r.supplier_id) {
+    const { data: s } = await db.from('suppliers').select('name').eq('id', r.supplier_id).maybeSingle()
+    supplier = s?.name ?? null
+  }
+  const amount = r.qty ? `${String(r.qty).replace('.', ',')} ${r.unit}` : null
+  return {
+    payload: {
+      title: `🆕 Novi artikal: ${r.name}`,
+      body: [r.user_name, supplier, amount, 'dodirni da potvrdiš'].filter(Boolean).join(' · '),
+      url: '/admin#zahtevi',
+      tag: `request-${requestId}`,
     },
   }
 }

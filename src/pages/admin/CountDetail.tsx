@@ -4,17 +4,14 @@ import {
   getCount,
   listArticles,
   listCategories,
-  listCounts,
-  listLagerDates,
-  listLagerStock,
   listLinesForCount,
   listOrdersForCount,
-  pendingForComparison,
 } from '../../data/repository'
 import type { Article, Category, Count, CountLine } from '../../data/types'
 import { describeInput, formatNum, noteOf } from '../../lib/measure'
-import { compareStock, compareTotals, type CompareTotals } from '../../lib/compare'
-import { lagerDateFor } from '../../lib/payment'
+import { type CompareTotals } from '../../lib/compare'
+import { comparisonFor } from '../../data/orders'
+import { downloadCsv, fileDate } from '../../lib/csv'
 import { Badge, Card, Spinner, formatMoney } from '../../components/ui'
 import { fmtDateTime } from '../../lib/format'
 
@@ -51,15 +48,8 @@ export function CountDetail() {
       setOrderCount(orders.length)
       setLoading(false)
       if (c?.status !== 'finished') return
-      try {
-        const [dates, counts] = await Promise.all([listLagerDates(), listCounts()])
-        const date = lagerDateFor(dates, counts, c)
-        if (!date) return
-        const [stock, pending] = await Promise.all([listLagerStock(date), pendingForComparison(date, c, a)])
-        setComparison({ date, totals: compareTotals(compareStock(stock, a, l, pending)) })
-      } catch {
-        // No comparison: the counted values still show.
-      }
+      // No comparison when it fails: the counted values still show.
+      comparisonFor(c, a).then(setComparison, () => setComparison(null))
     })()
   }, [id])
 
@@ -127,6 +117,18 @@ export function CountDetail() {
             </Link>
           </div>
         )}
+        <button
+          onClick={() =>
+            downloadCsv(
+              `popis-${fileDate(count.datetime)}.csv`,
+              ['Kategorija', 'Artikal', 'Uneto', 'Količina', 'Jedinica'],
+              groups.flatMap((g) => g.lines.map((l) => [g.name, l.article_name, describe(l), l.counted, l.unit])),
+            )
+          }
+          className="rounded-xl border border-slate-200 bg-surface px-4 py-2.5 font-medium text-slate-700 hover:bg-slate-50"
+        >
+          ⬇ Excel
+        </button>
       </div>
 
       {comparison && (

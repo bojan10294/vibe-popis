@@ -9,8 +9,14 @@ import {
   listSuppliers,
   saveDeliveryLine,
   setDeliverySupplier,
+  createArticleRequest,
+  deleteArticleRequest,
+  listRequestsForDelivery,
 } from '../data/repository'
-import type { Article, Delivery, DeliveryDirection, DeliveryLine, Supplier } from '../data/types'
+import type { Article, ArticleRequest, Delivery, DeliveryCheckSnapshot, DeliveryDirection, DeliveryLine, Supplier } from '../data/types'
+import { UNITS, ORDER_UNITS } from '../data/types'
+import { checkDelivery } from '../data/orders'
+import { useAuth } from '../auth/AuthContext'
 import { matchesQuery } from '../lib/format'
 import { formatNum, unitLabel } from '../lib/measure'
 import { parseQty, toBase, unitOptions } from '../lib/delivery'
@@ -39,6 +45,10 @@ export function DeliverySession() {
   const [picked, setPicked] = useState<Picked | null>(null)
   const [note, setNote] = useState('')
   const [confirming, setConfirming] = useState(false)
+  /** "Nema ga na spisku" requests made on this faktura. */
+  const [requests, setRequests] = useState<ArticleRequest[]>([])
+  const [requesting, setRequesting] = useState(false)
+  const { user } = useAuth()
   const searchRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -56,6 +66,8 @@ export function DeliverySession() {
       setSuppliers(sups)
       setLines(ls)
       setLoading(false)
+      // Before migration 017 there are no requests.
+      listRequestsForDelivery(id).then(setRequests, () => setRequests([]))
     })()
   }, [id])
 
@@ -111,9 +123,42 @@ export function DeliverySession() {
 
   const confirm = async () => {
     setConfirming(true)
-    await confirmDelivery(id, note.trim())
+    // Naručeno vs stiglo for the notification; never blocks confirming.
+    let check: DeliveryCheckSnapshot | null = null
+    try {
+      check = await checkDelivery(delivery)
+    } catch {
+      check = null
+    }
+    await confirmDelivery(id, note.trim(), check)
     navigate('/count', { state: { deliveryConfirmed: true } })
   }
+
+  const removeRequest = async (r: ArticleRequest) => {
+    setRequests((prev) => prev.filter((x) => x.id !== r.id))
+    await deleteArticleRequest(r.id).catch(() => setRequests((prev) => [...prev, r]))
+  }
+
+  const requestSheet = requesting && user && (
+    <NewArticleSheet
+      initialName={query.trim()}
+      onCancel={() => setRequesting(false)}
+      onSave={async (name, qty, unit) => {
+        const req = await createArticleRequest(user, {
+          name,
+          unit,
+          qty,
+          delivery_id: id,
+          supplier_id: delivery.supplier_id,
+        })
+        setRequests((prev) => [...prev, req])
+        setRequesting(false)
+        setQuery('')
+      }}
+    />
+  )
+
+  const hasItems = lines.length > 0 || requests.length > 0
 
   const amountSheet = picked && (
     <AmountSheet
@@ -139,6 +184,32 @@ export function DeliverySession() {
         <section className="space-y-1.5">
           <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-red-500">↩ Vraćamo ({returned.length})</h2>
           <LineList lines={returned} onEdit={editLine} onRemove={removeLine} />
+        </section>
+      )}
+      {requests.length > 0 && (
+        <section className="space-y-1.5">
+          <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-brand-600">
+            🆕 Novi artikli, čekaju potvrdu ({requests.length})
+          </h2>
+          <div className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-surface">
+            {requests.map((r) => (
+              <div key={r.id} className="flex items-center gap-2 py-2.5 pl-3 pr-1">
+                <span className="min-w-0 flex-1 truncate text-slate-800">{r.name}</span>
+                <span className="shrink-0 text-sm font-semibold text-slate-700">
+                  {r.qty ? `${formatNum(r.qty)} ${r.unit}` : r.unit}
+                </span>
+                {r.status === 'pending' && (
+                  <button
+                    onClick={() => removeRequest(r)}
+                    aria-label={`Ukloni ${r.name}`}
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
         </section>
       )}
     </>
@@ -172,7 +243,7 @@ export function DeliverySession() {
           </Button>
           <Button
             onClick={confirm}
-            disabled={confirming || lines.length === 0}
+            disabled={confirming || !hasItems}
             className="flex-1 bg-green-600 hover:brightness-110"
           >
             {confirming ? 'Šaljem...' : '✓ Sve u redu, potvrdi'}
@@ -261,17 +332,108 @@ export function DeliverySession() {
         <p className="px-1 text-sm text-slate-500">Izaberi dobavljača da vidiš njegove artikle, ili samo kucaj.</p>
       ) : null}
 
+      <button
+        onClick={() => setRequesting(true)}
+        className="w-full rounded-xl border border-dashed border-slate-300 px-3 py-2.5 text-left text-sm font-medium text-brand-700 hover:bg-slate-50"
+      >
+        ＋ Nema ga na spisku? Dodaj novi artikal
+      </button>
+
       {lineSections}
 
       <BottomBar>
         <Button variant="ghost" onClick={() => navigate('/count')}>
           Kasnije
         </Button>
-        <Button onClick={() => setReviewing(true)} disabled={lines.length === 0} className="flex-1">
+        <Button onClick={() => setReviewing(true)} disabled={!hasItems} className="flex-1">
           Proveri i potvrdi →
         </Button>
       </BottomBar>
       {amountSheet}
+      {requestSheet}
+    </div>
+  )
+}
+
+const REQUEST_UNITS = Array.from(new Set<string>([...UNITS, ...ORDER_UNITS]))
+
+/** "Nema ga na spisku": name + how much arrived; the admin gets a push to confirm it. */
+function NewArticleSheet({
+  initialName,
+  onSave,
+  onCancel,
+}: {
+  initialName: string
+  onSave: (name: string, qty: number | null, unit: string) => Promise<void>
+  onCancel: () => void
+}) {
+  const [name, setName] = useState(initialName)
+  const [text, setText] = useState('')
+  const [unit, setUnit] = useState('kom')
+  const [saving, setSaving] = useState(false)
+  const qty = parseQty(text)
+  const control =
+    'w-full rounded-xl border border-slate-200 bg-surface px-3.5 py-3 text-base text-slate-800 outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15'
+
+  const save = async () => {
+    if (!name.trim() || saving) return
+    setSaving(true)
+    try {
+      await onSave(name.trim(), qty, unit)
+    } catch {
+      setSaving(false)
+      alert('Nije sačuvano. Proveri internet i probaj ponovo.')
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-20 flex items-end justify-center bg-slate-900/40" onClick={onCancel}>
+      <form
+        onClick={(e) => e.stopPropagation()}
+        onSubmit={(e) => {
+          e.preventDefault()
+          save()
+        }}
+        className="w-full max-w-5xl space-y-3 rounded-t-3xl bg-surface p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl"
+      >
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-brand-600">Novi artikal</p>
+          <p className="text-sm text-slate-500">Admin dobija obaveštenje i potvrđuje ga. Do tada stoji kao „čeka potvrdu”.</p>
+        </div>
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Naziv, npr. Aperol 0,7"
+          autoFocus
+          aria-label="Naziv artikla"
+          className={control}
+        />
+        <div className="flex gap-2">
+          <input
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            inputMode="decimal"
+            placeholder="Koliko je stiglo"
+            aria-label="Količina"
+            className={`${control} min-w-0 flex-1`}
+          />
+          <select value={unit} onChange={(e) => setUnit(e.target.value)} aria-label="Jedinica" className={`${control} w-32 shrink-0`}>
+            {REQUEST_UNITS.map((u) => (
+              <option key={u} value={u}>
+                {u}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex gap-3">
+          <Button type="button" variant="ghost" onClick={onCancel}>
+            Otkaži
+          </Button>
+          <Button type="submit" disabled={!name.trim() || saving} className="flex-1">
+            {saving ? 'Šaljem...' : 'Dodaj i pošalji adminu'}
+          </Button>
+        </div>
+      </form>
     </div>
   )
 }

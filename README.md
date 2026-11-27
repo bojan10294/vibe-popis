@@ -45,8 +45,14 @@ Jednom:
 
 1. SQL Editor → pokreni [`supabase/migrations/014_deliveries.sql`](supabase/migrations/014_deliveries.sql),
    pa [`015_delivery_returns.sql`](supabase/migrations/015_delivery_returns.sql) (povrat robe),
-   pa [`016_not_on_sef.sql`](supabase/migrations/016_not_on_sef.sql) (fakture van SEF-a se pamte po lager listi)
+   pa [`016_not_on_sef.sql`](supabase/migrations/016_not_on_sef.sql) (fakture van SEF-a se pamte po lager listi),
+   pa [`017_arrivals_requests.sql`](supabase/migrations/017_arrivals_requests.sql) (naručeno vs stiglo, novi artikli od radnika)
 2. `supabase functions deploy notify-count-finished --no-verify-jwt` (nova verzija zna i za fakture)
+
+## Testovi
+
+`npm test` — proverava proračune (nabavka, poređenje, fakture van SEF-a, naručeno vs stiglo,
+radni dan do 07:00, popis bez interneta, izvoz u Excel).
 
 ## Netlify
 

@@ -61,6 +61,8 @@ export function CountSession() {
   const [finishing, setFinishing] = useState(false)
   /** The last "Završi" didn't go through (no internet). */
   const [finishFailed, setFinishFailed] = useState(false)
+  /** Server error text when the phone was online (null = no internet). */
+  const [finishError, setFinishError] = useState<string | null>(null)
   /** Entries still only on this phone, and whether the last send failed. */
   const [waiting, setWaiting] = useState(0)
   const [offline, setOffline] = useState(false)
@@ -232,10 +234,13 @@ export function CountSession() {
     setFinishing(true)
     setFinishFailed(false)
     try {
-      if (!(await send())) throw new Error('offline')
+      if (!(await send())) throw new Error('Unos nije poslat')
       await finishCount(id)
-    } catch {
-      setOffline(true)
+    } catch (e) {
+      // The phone says it is online: then it is the server, not the internet.
+      const online = navigator.onLine
+      setOffline(!online)
+      setFinishError(online ? (e instanceof Error ? e.message : String(e)) : null)
       setFinishFailed(true)
       setFinishing(false)
       return
@@ -359,10 +364,22 @@ export function CountSession() {
         </div>
         {finishFailed && (
           <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-red-800">
-            <p className="font-bold">⚠ Popis nije poslat, nema interneta.</p>
-            <p className="text-sm">
-              Sve je sačuvano na ovom telefonu, ništa se ne gubi. Kad se vrati internet, pritisni ponovo „Završi popis”.
-            </p>
+            {finishError ? (
+              <>
+                <p className="font-bold">⚠ Popis nije poslat, greška na serveru.</p>
+                <p className="text-sm">
+                  Sve je sačuvano na ovom telefonu, ništa se ne gubi. Javi adminu i pokušaj ponovo malo kasnije.
+                </p>
+                <p className="mt-1 text-xs text-red-600">Greška: {finishError}</p>
+              </>
+            ) : (
+              <>
+                <p className="font-bold">⚠ Popis nije poslat, nema interneta.</p>
+                <p className="text-sm">
+                  Sve je sačuvano na ovom telefonu, ništa se ne gubi. Kad se vrati internet, pritisni ponovo „Završi popis”.
+                </p>
+              </>
+            )}
           </div>
         )}
         {groups.map((g) => (

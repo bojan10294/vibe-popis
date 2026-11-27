@@ -1,6 +1,6 @@
 import { run, sb } from './supabase'
 import { uuid } from '../lib/crypto'
-import { needsOrder, noteOf, orderThreshold, quantityOf, round, suggestedQuantity } from '../lib/measure'
+import { needsOrder, noteOf, orderThreshold, quantityOf, round, suggestedQuantity, unitLabel } from '../lib/measure'
 import { pendingByCode } from '../lib/compare'
 import { isBefore } from '../lib/format'
 import { businessDayIso } from '../lib/day'
@@ -11,7 +11,9 @@ import type {
   Count,
   CountInput,
   CountLine,
+  ArticleRequest,
   Delivery,
+  DeliveryCheckSnapshot,
   DeliveryLine,
   LagerArticle,
   LagerStock,
@@ -466,11 +468,19 @@ export async function deleteDeliveryLine(id: string): Promise<void> {
   await run(sb().from('delivery_lines').delete().eq('id', id))
 }
 
-/** After the worker checked the list: marks it confirmed and tells the admins. */
-export async function confirmDelivery(id: string, note: string): Promise<void> {
-  await run(
-    sb().from('deliveries').update({ status: 'confirmed', confirmed_at: new Date().toISOString(), note }).eq('id', id),
-  )
+/**
+ * After the worker checked the list: marks it confirmed and tells the admins.
+ * `orderCheck` (naručeno vs stiglo) goes into the notification.
+ */
+export async function confirmDelivery(id: string, note: string, orderCheck: DeliveryCheckSnapshot | null): Promise<void> {
+  const update = { status: 'confirmed', confirmed_at: new Date().toISOString(), note }
+  try {
+    await run(sb().from('deliveries').update({ ...update, order_check: orderCheck }).eq('id', id))
+  } catch (e) {
+    // Before migration 017 there is no order_check column: confirm without it.
+    if (!/order_check/.test(String(e))) throw e
+    await run(sb().from('deliveries').update(update).eq('id', id))
+  }
   // Never blocks or fails the confirmation.
   void sb().functions.invoke('notify-count-finished', { body: { delivery_id: id } }).catch(() => {})
 }
@@ -520,4 +530,79 @@ export async function pendingForComparison(
   } catch {
     return new Map()
   }
+}
+
+// ---------------------------------------------------------------------------
+// New articles requested by workers ("nema ga na spisku")
+// ---------------------------------------------------------------------------
+
+export async function listArticleRequests(status?: ArticleRequest['status']): Promise<ArticleRequest[]> {
+  let q = sb().from('article_requests').select('*')
+  if (status) q = q.eq('status', status)
+  return run<ArticleRequest[]>(q.order('created_at', { ascending: false }))
+}
+
+export async function listRequestsForDelivery(deliveryId: string): Promise<ArticleRequest[]> {
+  return run<ArticleRequest[]>(
+    sb().from('article_requests').select('*').eq('delivery_id', deliveryId).order('created_at', { ascending: true }),
+  )
+}
+
+/** Saves the request and tells the admins (push), without waiting for it. */
+export async function createArticleRequest(
+  user: User,
+  fields: Pick<ArticleRequest, 'name' | 'unit' | 'qty' | 'delivery_id' | 'supplier_id'>,
+): Promise<ArticleRequest> {
+  const req: ArticleRequest = {
+    id: uuid(),
+    created_at: new Date().toISOString(),
+    user_id: user.id,
+    user_name: user.name,
+    status: 'pending',
+    article_id: null,
+    decided_at: null,
+    ...fields,
+  }
+  await run(sb().from('article_requests').insert(req))
+  void sb().functions.invoke('notify-count-finished', { body: { article_request_id: req.id } }).catch(() => {})
+  return req
+}
+
+export async function deleteArticleRequest(id: string): Promise<void> {
+  await run(sb().from('article_requests').delete().eq('id', id))
+}
+
+/**
+ * Approves a request with the article it is (a new one the admin just shaped,
+ * or an existing one). The amount that arrived goes onto its faktura.
+ */
+export async function approveArticleRequest(req: ArticleRequest, article: Article, isNew: boolean): Promise<void> {
+  if (isNew) await upsertArticle(article)
+  if (req.delivery_id && req.qty && req.qty > 0) {
+    const base = unitLabel(article)
+    await saveDeliveryLine({
+      delivery_id: req.delivery_id,
+      article_id: article.id,
+      article_name: article.name,
+      qty: req.qty,
+      unit: req.unit,
+      // The worker typed it in the unit chosen for the request; when that is
+      // the article's own unit it is the same amount, otherwise the admin
+      // fixes the line on the faktura.
+      base_qty: req.unit === base ? req.qty : req.qty * (req.unit === article.order_unit ? article.pack_size || 1 : 1),
+      base_unit: base,
+      direction: 'in',
+    })
+  }
+  await run(
+    sb().from('article_requests')
+      .update({ status: 'approved', article_id: article.id, decided_at: new Date().toISOString() })
+      .eq('id', req.id),
+  )
+}
+
+export async function rejectArticleRequest(id: string): Promise<void> {
+  await run(
+    sb().from('article_requests').update({ status: 'rejected', decided_at: new Date().toISOString() }).eq('id', id),
+  )
 }

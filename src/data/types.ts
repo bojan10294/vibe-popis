@@ -1,3 +1,5 @@
+import type { ArrivalLine } from '../lib/arrivals'
+
 // Domain model. Kept framework-agnostic so the same types work over
 // IndexedDB now and over Supabase later.
 
@@ -213,6 +215,34 @@ export interface Delivery {
   supplier_name: string | null
   note: string
   status: DeliveryStatus
+  /** Naručeno vs stiglo when it was confirmed (see data/orders.ts). */
+  order_check?: DeliveryCheckSnapshot | null
+}
+
+export interface DeliveryCheckSnapshot {
+  count_id: string
+  count_datetime: string
+  lines: ArrivalLine[]
+}
+
+export type ArticleRequestStatus = 'pending' | 'approved' | 'rejected'
+
+/** "Nema ga na spisku": a worker asks for a new article; the admin approves or rejects. */
+export interface ArticleRequest {
+  id: string
+  created_at: string
+  user_id: string
+  user_name: string
+  /** The faktura it arrived on (its amount is added there once approved). */
+  delivery_id: string | null
+  supplier_id: string | null
+  name: string
+  unit: string
+  qty: number | null
+  status: ArticleRequestStatus
+  /** The article it became (new or an existing one). */
+  article_id: string | null
+  decided_at: string | null
 }
 
 export interface DeliveryLine {

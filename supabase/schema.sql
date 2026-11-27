@@ -386,6 +386,38 @@ create policy member_read on lager_not_on_sef for select using (app_is_member())
 create policy admin_write on lager_not_on_sef for all using (app_is_admin()) with check (app_is_admin());
 grant select, insert, update, delete on lager_not_on_sef to anon, authenticated;
 
+-- Naručeno vs stiglo snapshot when a faktura is confirmed (migrations/017).
+alter table deliveries add column if not exists order_check jsonb;
+
+-- "Nema ga na spisku": new article requested by a worker, approved by the admin (017).
+create table if not exists article_requests (
+  id text primary key,
+  created_at timestamptz not null default now(),
+  user_id text not null,
+  user_name text not null,
+  delivery_id text references deliveries (id) on delete set null,
+  supplier_id text references suppliers (id) on delete set null,
+  name text not null,
+  unit text not null,
+  qty double precision,
+  status text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
+  article_id text,
+  decided_at timestamptz,
+  notified_at timestamptz
+);
+create index if not exists article_requests_status_idx on article_requests (status);
+alter table article_requests enable row level security;
+drop policy if exists member_read on article_requests;
+drop policy if exists member_insert on article_requests;
+drop policy if exists member_delete_pending on article_requests;
+drop policy if exists admin_update on article_requests;
+drop policy if exists admin_delete on article_requests;
+create policy member_read on article_requests for select using (app_is_member());
+create policy member_insert on article_requests for insert with check (app_is_member() and status = 'pending');
+create policy member_delete_pending on article_requests for delete using (app_is_member() and status = 'pending');
+create policy admin_update on article_requests for update using (app_is_admin()) with check (app_is_admin());
+grant select, insert, update, delete on article_requests to anon, authenticated;
+
 -- ---------------------------------------------------------------------------
 -- First admin account. Change the PIN in the app right after the first login.
 -- ---------------------------------------------------------------------------

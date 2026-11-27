@@ -5,21 +5,19 @@ import {
   getLatestFinishedCount,
   listArticles,
   listCategories,
-  listCounts,
-  listLagerDates,
-  listLagerStock,
-  listLinesForCount,
-  listOrdersForCount,
   listSuppliers,
-  pendingForComparison,
   updateOrderLine,
   deleteOrderLine,
   setOrderPayment,
 } from '../../data/repository'
 import type { Article, Category, Count, OrderLine, Payment, Supplier } from '../../data/types'
-import { compareStock, type CompareRow } from '../../lib/compare'
+import { type CompareRow } from '../../lib/compare'
 import { bookUnitLabel } from '../../lib/lager'
-import { autoPayment, lagerDateFor, paymentOf, rowFor } from '../../lib/payment'
+import { autoPayment, paymentOf, rowFor } from '../../lib/payment'
+import { arrivedSince, loadOrderView } from '../../data/orders'
+import { compareArrivals, type ArrivalLine } from '../../lib/arrivals'
+import { intlPhone, smsUrl, viberUrl, whatsappUrl } from '../../lib/share'
+import { downloadCsv, fileDate } from '../../lib/csv'
 import { formatNum, isWeekendOrderDay } from '../../lib/measure'
 import { fmtDateTime } from '../../lib/format'
 import { Button, Card, EmptyState, Spinner } from '../../components/ui'
@@ -37,29 +35,25 @@ export function OrderList() {
   const [lagerDate, setLagerDate] = useState<string | null>(null)
   const [rowByCode, setRowByCode] = useState<Map<string, CompareRow>>(new Map())
 
+  /** Per article: what arrived on fakture after this Popis (counting unit). */
+  const [arrived, setArrived] = useState<Map<string, number> | null>(null)
+
   useEffect(() => {
     ;(async () => {
       const c = countId ? await getCount(countId) : await getLatestFinishedCount()
       setCount(c ?? null)
-      if (c) setOrders(await listOrdersForCount(c.id))
       const [cats, arts, sups] = await Promise.all([listCategories(), listArticles(), listSuppliers()])
       setCategories(cats)
       setArticles(arts)
       setSuppliers(sups)
       if (c) {
-        try {
-          const [dates, counts, lines] = await Promise.all([listLagerDates(), listCounts(), listLinesForCount(c.id)])
-          const date = lagerDateFor(dates, counts, c)
-          if (date) {
-            // Same numbers as Poređenje: fakture the accountant doesn't have yet count as in stock.
-            const [stock, pending] = await Promise.all([listLagerStock(date), pendingForComparison(date, c, arts)])
-            const rows = compareStock(stock, arts, lines, pending)
-            setLagerDate(date)
-            setRowByCode(new Map(rows.map((r) => [r.code, r])))
-          }
-        } catch {
-          // No comparison: everything stays "na račun", the list still works.
-        }
+        // Keš/račun with the same numbers as Poređenje (see data/orders.ts).
+        const view = await loadOrderView(c, arts)
+        setOrders(view.orders)
+        setLagerDate(view.lagerDate)
+        setRowByCode(view.rowByCode)
+        // Before the fakture tables exist there is simply nothing arrived.
+        arrivedSince(c).then(setArrived, () => setArrived(null))
       }
       setLoading(false)
     })()
@@ -68,6 +62,9 @@ export function OrderList() {
   const artById = useMemo(() => new Map(articles.map((a) => [a.id, a])), [articles])
   const rowOf = (o: OrderLine) => rowFor(o, artById, rowByCode)
   const pay = (o: OrderLine): Payment => paymentOf(o, rowOf(o))
+  /** Naručeno vs stiglo for one line; only na račun lines come with a faktura. */
+  const arrivalOf = (o: OrderLine): ArrivalLine | undefined =>
+    arrived && pay(o) === 'invoice' ? compareArrivals([o], articles, arrived)[0] : undefined
 
   // Grouped by supplier (in the order set under Dobavljači), then by category
   // and article order. Uses the article's current supplier, so assigning one
@@ -161,24 +158,28 @@ export function OrderList() {
   }
 
   const exportCsv = () => {
-    const header = 'Dobavljac,Artikal,Stanje,Minimum,Poruciti,Jedinica,Placanje,Fali\n'
-    const body = groups
-      .flatMap((g) =>
-        g.list.map((o) =>
-          [
-            csv(g.name),
-            csv(o.article_name),
-            o.kind === 'yes_no' ? 'nema' : formatNum(o.counted),
-            o.kind === 'yes_no' || noteOnly(o) ? '' : formatNum(o.minimum),
-            noteOnly(o) ? '' : formatNum(o.suggested_order_qty),
+    if (!count) return
+    downloadCsv(
+      `lista-nabavke-${fileDate(count.datetime)}.csv`,
+      ['Dobavljač', 'Artikal', 'Stanje', 'Jedinica', 'Minimum', 'Poručiti', 'Jedinica nabavke', 'Plaćanje', 'Stiglo', 'Fali'],
+      groups.flatMap((g) =>
+        g.list.map((o) => {
+          const a = arrivalOf(o)
+          return [
+            g.name,
+            o.article_name,
+            o.kind === 'yes_no' ? 'nema' : o.counted,
+            o.kind === 'yes_no' ? '' : o.unit,
+            o.kind === 'yes_no' || noteOnly(o) ? null : o.minimum,
+            noteOnly(o) ? null : o.suggested_order_qty,
             noteOnly(o) ? '' : o.order_unit,
-            pay(o) === 'cash' ? 'kes' : 'racun',
-            csv(o.note ?? ''),
-          ].join(','),
-        ),
-      )
-      .join('\n')
-    download('lista-nabavke.csv', header + body)
+            pay(o) === 'cash' ? 'keš' : 'račun',
+            a ? (a.status === 'ok' ? 'da' : a.status === 'short' ? `${formatNum(a.arrivedBase)} od ${formatNum(a.orderedBase)} ${a.baseUnit}` : 'ne') : '',
+            o.note ?? '',
+          ]
+        }),
+      ),
+    )
   }
 
   if (loading) return <Spinner />
@@ -214,7 +215,7 @@ export function OrderList() {
             <Button variant="secondary" onClick={() => copy(asText(), '__all')} className="text-sm">
               {copied === '__all' ? '✓ Kopirano' : 'Kopiraj sve'}
             </Button>
-            <Button variant="secondary" onClick={exportCsv} className="text-sm">CSV</Button>
+            <Button variant="secondary" onClick={exportCsv} className="text-sm">⬇ Excel</Button>
           </div>
         )}
       </div>
@@ -236,6 +237,7 @@ export function OrderList() {
                 {copied === (g.key || 'none') ? '✓ Kopirano' : 'Kopiraj'}
               </button>
             </div>
+            <SendButtons phone={g.phone} text={groupText(g)} supplierId={g.key} />
             <div className="overflow-hidden rounded-xl border border-slate-200 bg-surface">
               {PAYMENTS.map(([p, label]) => {
                 const list = g.list.filter((o) => pay(o) === p)
@@ -262,6 +264,7 @@ export function OrderList() {
                           : `ima ${formatNum(o.counted)} ${o.unit} · ${weekend ? 'treba' : artById.get(o.article_id)?.regular_target != null ? 'poželjno' : 'min'} ${formatNum(o.minimum)}`}
                     </p>
                     {o.note && <p className="mt-0.5 text-sm font-medium text-red-600">Fali: {o.note}</p>}
+                    <ArrivalBadge a={arrivalOf(o)} />
                     <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs">
                       <BookInfo row={rowOf(o)} />
                       <button
@@ -307,6 +310,69 @@ export function OrderList() {
   )
 }
 
+/** WhatsApp / Viber / SMS with the order text ready; the admin presses send in that app. */
+function SendButtons({ phone, text, supplierId }: { phone: string | null; text: string; supplierId: string }) {
+  if (!supplierId) return null
+  if (!phone || !intlPhone(phone)) {
+    return (
+      <p className="px-1 text-xs text-slate-400">
+        Za slanje porudžbine upiši telefon dobavljača u <Link to="/admin/suppliers" className="text-brand-700 hover:underline">Dobavljačima</Link>.
+      </p>
+    )
+  }
+  const btn = 'rounded-lg border border-slate-200 bg-surface px-2.5 py-1 text-xs font-semibold shadow-sm hover:bg-slate-50'
+  const viber = async () => {
+    // Viber can't prefill text for a number: copy it, then open the chat to paste.
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      // still open the chat
+    }
+    const url = viberUrl(phone)
+    if (url) window.location.href = url
+  }
+  const share = async () => {
+    try {
+      await navigator.share({ text })
+    } catch {
+      // cancelled
+    }
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 px-1">
+      <span className="text-xs text-slate-400">Pošalji:</span>
+      <a href={whatsappUrl(phone, text) ?? undefined} target="_blank" rel="noreferrer" className={`${btn} text-green-700`}>
+        WhatsApp
+      </a>
+      <button onClick={viber} className={`${btn} text-violet-700`} title="Tekst se kopira — u Viberu samo nalepi">
+        Viber
+      </button>
+      <a href={smsUrl(phone, text) ?? undefined} className={`${btn} text-slate-700`}>
+        SMS
+      </a>
+      {'share' in navigator && (
+        <button onClick={share} className={`${btn} text-slate-700`}>
+          Drugo…
+        </button>
+      )}
+    </div>
+  )
+}
+
+/** Naručeno vs stiglo on the line: what the fakture after this Popis brought. */
+function ArrivalBadge({ a }: { a: ArrivalLine | undefined }) {
+  if (!a) return null
+  if (a.status === 'ok') return <p className="mt-0.5 text-xs font-semibold text-green-700">✓ stiglo</p>
+  if (a.status === 'short') {
+    return (
+      <p className="mt-0.5 text-xs font-semibold text-amber-700">
+        stiglo {formatNum(a.arrivedBase)} od {formatNum(a.orderedBase)} {a.baseUnit}
+      </p>
+    )
+  }
+  return <p className="mt-0.5 text-xs text-slate-400">još nije stiglo</p>
+}
+
 /** "knj. 92,84 l · manjak 72,84 l" — the accountant's book stock vs. this Popis. */
 function BookInfo({ row: r }: { row: CompareRow | undefined }) {
   if (!r) return <span className="text-slate-400">nije povezano sa knjigovodstvom</span>
@@ -341,16 +407,3 @@ function qtyText(o: OrderLine): string {
   return o.note ? `${qty} (fali: ${o.note})` : qty
 }
 
-function csv(s: string): string {
-  return `"${s.replace(/"/g, '""')}"`
-}
-
-function download(filename: string, content: string) {
-  const blob = new Blob(['﻿' + content], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.click()
-  URL.revokeObjectURL(url)
-}
