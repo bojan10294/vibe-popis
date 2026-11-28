@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import {
@@ -103,7 +103,10 @@ export function StaffHome() {
           className="tile-obsidian group relative flex min-h-56 flex-col justify-between overflow-hidden rounded-3xl p-6 text-left hover:-translate-y-0.5 disabled:opacity-70 sm:col-span-3"
         >
           <div className="flex items-start justify-between gap-3">
-            <p className="eyebrow text-white/55">{activeId ? 'Nezavršen popis' : 'Za brojanje danas'}</p>
+            <span className="pill pill-dark">
+              {activeId ? <span className="live-dot" /> : <span className="h-1.5 w-1.5 rounded-full bg-[#6b86ff]" />}
+              {activeId ? 'U toku · nezavršen' : 'Za brojanje danas'}
+            </span>
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-600 text-xl font-bold text-on-brand shadow-[0_0_0_6px_rgb(90_120_255/0.22)] transition-transform duration-300 group-hover:rotate-[-8deg] group-hover:scale-110">
               {activeId ? '→' : '+'}
             </span>
@@ -127,10 +130,17 @@ export function StaffHome() {
         <button
           onClick={deliveryId ? () => navigate(`/delivery/${deliveryId}`) : startDelivery}
           disabled={starting || offline}
-          className="lift group flex flex-col justify-between gap-6 rounded-3xl border border-slate-200 bg-surface p-5 text-left shadow-sm disabled:opacity-70 sm:col-span-2"
+          style={{ '--bar': deliveryId ? '#ef4444' : 'var(--color-brand-500)' } as CSSProperties}
+          className="lift accent-bar group flex flex-col justify-between gap-6 rounded-3xl border border-slate-200 bg-surface p-5 pl-6 text-left shadow-sm disabled:opacity-70 sm:col-span-2"
         >
           <span className="flex items-center justify-between">
-            <span className="eyebrow text-slate-500">{deliveryId ? 'Nezavršena faktura' : 'Stigla roba'}</span>
+            {deliveryId ? (
+              <span className="pill text-slate-700">
+                <span className="live-dot" />U toku
+              </span>
+            ) : (
+              <span className="eyebrow text-brand-700">Stigla roba</span>
+            )}
             <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-amber-200 bg-amber-50 text-2xl transition-transform duration-300 group-hover:-rotate-6">
               📦
             </span>

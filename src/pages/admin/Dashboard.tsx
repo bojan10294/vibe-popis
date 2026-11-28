@@ -121,7 +121,10 @@ export function Dashboard() {
             className="tile-obsidian group col-span-2 row-span-2 flex min-h-52 flex-col justify-between rounded-3xl p-5 hover:-translate-y-0.5"
           >
             <div className="flex items-start justify-between gap-3">
-              <p className="eyebrow text-white/55">Lista nabavke</p>
+              <span className="pill pill-dark">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#6b86ff]" />
+                Lista nabavke
+              </span>
               <span className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-600 font-bold text-on-brand transition-transform duration-300 group-hover:translate-x-1">
                 →
               </span>
@@ -135,8 +138,8 @@ export function Dashboard() {
             </div>
           </Link>
           <Link to="/admin/compare" className="col-span-1 sm:col-span-2">
-            <Card interactive className="flex h-full flex-col justify-between gap-4">
-              <p className="eyebrow text-red-600">▼ Manjak</p>
+            <Card interactive accent="red" className="flex h-full flex-col justify-between gap-4">
+              <p className="eyebrow text-red-600">Manjak</p>
               <p className="num text-2xl font-semibold tracking-tight text-slate-900">
                 {totals ? formatMoney(totals.shortage) : '—'}
                 <span className="ml-1 text-xs font-medium text-slate-400">din</span>
@@ -144,8 +147,8 @@ export function Dashboard() {
             </Card>
           </Link>
           <Link to="/admin/compare" className="col-span-1 sm:col-span-2">
-            <Card interactive className="flex h-full flex-col justify-between gap-4">
-              <p className="eyebrow text-green-700">▲ Višak</p>
+            <Card interactive accent="green" className="flex h-full flex-col justify-between gap-4">
+              <p className="eyebrow text-green-700">Višak</p>
               <p className="num text-2xl font-semibold tracking-tight text-slate-900">
                 {totals ? formatMoney(totals.surplus) : '—'}
                 <span className="ml-1 text-xs font-medium text-slate-400">din</span>
@@ -180,7 +183,7 @@ export function Dashboard() {
                     <p className="truncate text-sm text-slate-500">{d.user_name}</p>
                   </div>
                   {d.status === 'in_progress' ? (
-                    <Badge tone="amber">u toku</Badge>
+                    <Badge tone="live">u toku</Badge>
                   ) : missing > 0 ? (
                     <Badge tone="red">fali {missing}</Badge>
                   ) : (

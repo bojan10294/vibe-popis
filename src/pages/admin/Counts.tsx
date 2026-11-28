@@ -50,7 +50,7 @@ export function CountRow({ count: c, onDelete }: { count: Count; onDelete?: () =
         <p className="text-sm text-slate-500">{c.user_name}</p>
       </Link>
       <div className="flex items-center gap-2">
-        <Badge tone={c.status === 'finished' ? 'green' : 'amber'}>
+        <Badge tone={c.status === 'finished' ? 'green' : 'live'}>
           {c.status === 'finished' ? 'završeno' : 'u toku'}
         </Badge>
         {onDelete && (

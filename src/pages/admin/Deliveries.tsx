@@ -88,7 +88,7 @@ export function Deliveries() {
                   {d.note ? ` · ${d.note}` : ''}
                 </p>
               </div>
-              <Badge tone={d.status === 'confirmed' ? 'green' : 'amber'}>
+              <Badge tone={d.status === 'confirmed' ? 'green' : 'live'}>
                 {d.status === 'confirmed' ? 'potvrđeno' : 'u toku'}
               </Badge>
             </Link>
@@ -140,7 +140,7 @@ export function DeliveryDetail() {
         </h1>
         <p className="text-sm text-slate-500">
           {delivery.user_name} · {fmtDateTime(delivery.confirmed_at ?? delivery.created_at)}{' '}
-          <Badge tone={delivery.status === 'confirmed' ? 'green' : 'amber'}>
+          <Badge tone={delivery.status === 'confirmed' ? 'green' : 'live'}>
             {delivery.status === 'confirmed' ? 'potvrđeno' : 'u toku'}
           </Badge>
         </p>

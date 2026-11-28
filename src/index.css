@@ -4,8 +4,9 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /*
- * "Šank" — the café's ledger. Warm alabaster paper by day, obsidian bar top by
- * night, one cobalt accent for whatever you act on.
+ * Documentary look: near-black screen, cool grey cards with a hairline edge,
+ * wide-spaced capital labels. Cobalt is the accent for whatever you act on;
+ * red only where something is wrong, missing or live.
  *
  * Neutrals 50–300 are translucent ink, not solid greys: borders, dividers and
  * tinted rows layer correctly on both the canvas and a card. 400–900 are the
@@ -16,24 +17,24 @@
   --font-display: 'Bricolage Grotesque Variable', 'Plus Jakarta Sans Variable', ui-sans-serif, sans-serif;
   --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
 
-  --color-canvas: #ece8df;
-  --color-surface: #f7f5f0;
+  --color-canvas: #eceef1;
+  --color-surface: #fafbfc;
   /* Solid "selected" fill (chips, active tab) and the text on it. */
-  --color-ink: #1c1d17;
+  --color-ink: #16171b;
   --color-on-ink: #ffffff;
   /* Text on the cobalt accent, in both themes. */
   --color-on-brand: #ffffff;
 
-  --color-slate-50: rgb(40 36 20 / 0.035);
-  --color-slate-100: rgb(40 36 20 / 0.065);
-  --color-slate-200: rgb(40 36 20 / 0.11);
-  --color-slate-300: rgb(40 36 20 / 0.2);
-  --color-slate-400: #8f8b7e;
-  --color-slate-500: #6d695d;
-  --color-slate-600: #545146;
-  --color-slate-700: #3d3b33;
-  --color-slate-800: #29281f;
-  --color-slate-900: #18180f;
+  --color-slate-50: rgb(20 22 30 / 0.035);
+  --color-slate-100: rgb(20 22 30 / 0.06);
+  --color-slate-200: rgb(20 22 30 / 0.1);
+  --color-slate-300: rgb(20 22 30 / 0.18);
+  --color-slate-400: #8b8e98;
+  --color-slate-500: #686b75;
+  --color-slate-600: #4f525b;
+  --color-slate-700: #383a42;
+  --color-slate-800: #24262c;
+  --color-slate-900: #131418;
 
   /* Cobalt. 600 is the button fill; 700–900 are text shades. */
   --color-brand-50: #eef1ff;
@@ -82,21 +83,21 @@
 
 .dark {
   color-scheme: dark;
-  --color-canvas: #0d0e0b;
-  --color-surface: #161713;
+  --color-canvas: #09090b;
+  --color-surface: #161619;
   --color-ink: #4a6aff;
   --color-on-ink: #ffffff;
 
-  --color-slate-50: rgb(250 250 235 / 0.035);
-  --color-slate-100: rgb(250 250 235 / 0.06);
-  --color-slate-200: rgb(250 250 235 / 0.095);
-  --color-slate-300: rgb(250 250 235 / 0.17);
-  --color-slate-400: #7d7f72;
-  --color-slate-500: #9a9c8f;
-  --color-slate-600: #b8baad;
-  --color-slate-700: #d2d4c7;
-  --color-slate-800: #e7e8de;
-  --color-slate-900: #f4f4ec;
+  --color-slate-50: rgb(240 242 255 / 0.035);
+  --color-slate-100: rgb(240 242 255 / 0.06);
+  --color-slate-200: rgb(240 242 255 / 0.09);
+  --color-slate-300: rgb(240 242 255 / 0.16);
+  --color-slate-400: #7a7c86;
+  --color-slate-500: #9a9ca6;
+  --color-slate-600: #b9bbc4;
+  --color-slate-700: #d4d5dc;
+  --color-slate-800: #e9eaef;
+  --color-slate-900: #f6f6f9;
 
   --color-brand-50: rgb(90 120 255 / 0.09);
   --color-brand-100: rgb(90 120 255 / 0.15);
@@ -162,17 +163,16 @@
     z-index: -1;
     pointer-events: none;
     background:
-      radial-gradient(60rem 30rem at 100% -10%, rgb(61 92 255 / 0.2), transparent 60%),
-      radial-gradient(50rem 30rem at -10% 110%, rgb(232 160 90 / 0.14), transparent 60%),
-      radial-gradient(circle at 1px 1px, rgb(40 36 20 / 0.09) 1px, transparent 0) 0 0 / 22px 22px;
+      radial-gradient(60rem 30rem at 100% -10%, rgb(61 92 255 / 0.12), transparent 60%),
+      radial-gradient(circle at 1px 1px, rgb(20 22 30 / 0.07) 1px, transparent 0) 0 0 / 22px 22px;
     -webkit-mask-image: linear-gradient(to bottom, black, rgb(0 0 0 / 0.55));
     mask-image: linear-gradient(to bottom, black, rgb(0 0 0 / 0.55));
   }
   .dark body::before {
     background:
-      radial-gradient(55rem 28rem at 100% -10%, rgb(80 110 255 / 0.16), transparent 60%),
-      radial-gradient(50rem 30rem at -10% 110%, rgb(232 140 70 / 0.07), transparent 60%),
-      radial-gradient(circle at 1px 1px, rgb(250 250 235 / 0.06) 1px, transparent 0) 0 0 / 22px 22px;
+      radial-gradient(55rem 28rem at 100% -10%, rgb(80 110 255 / 0.1), transparent 60%),
+      radial-gradient(70rem 50rem at 50% 120%, rgb(0 0 0 / 0.6), transparent 70%),
+      radial-gradient(circle at 1px 1px, rgb(240 242 255 / 0.04) 1px, transparent 0) 0 0 / 22px 22px;
   }
 
   h1,
@@ -250,13 +250,72 @@
 
   /* The obsidian tile: dark in both themes, dot grid, cobalt glow. */
   .tile-obsidian {
-    color: #f1f1e8;
+    color: #f3f3f6;
     background:
-      radial-gradient(22rem 14rem at 110% -20%, rgb(90 120 255 / 0.45), transparent 65%),
-      radial-gradient(circle at 1px 1px, rgb(255 255 255 / 0.08) 1px, transparent 0) 0 0 / 16px 16px,
-      #191a15;
-    border: 1px solid rgb(255 255 255 / 0.08);
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08), 0 24px 48px -28px rgb(20 20 5 / 0.7);
+      radial-gradient(24rem 14rem at 110% -30%, rgb(74 106 255 / 0.28), transparent 65%),
+      linear-gradient(to bottom, #1a1a1e, #121215);
+    border: 1px solid rgb(255 255 255 / 0.09);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06), 0 24px 48px -28px rgb(0 0 0 / 0.7);
+  }
+
+  /* A colored bar down the left edge marks what matters on a card. */
+  .accent-bar {
+    position: relative;
+    overflow: hidden;
+  }
+  .accent-bar::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.875rem;
+    bottom: 0.875rem;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background: var(--bar, var(--color-brand-500));
+  }
+
+  /* "● CEO FILM · 30 MIN" — a status pill with a dot. */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-radius: 9999px;
+    border: 1px solid var(--color-slate-200);
+    background: color-mix(in oklab, var(--color-surface) 70%, transparent);
+    padding: 0.3rem 0.75rem;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .pill-dark {
+    border-color: rgb(255 255 255 / 0.12);
+    background: rgb(0 0 0 / 0.35);
+    color: rgb(255 255 255 / 0.85);
+  }
+  .live-dot {
+    position: relative;
+    height: 0.45rem;
+    width: 0.45rem;
+    flex: none;
+    border-radius: 9999px;
+    background: #ef4444;
+  }
+  .live-dot::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: inherit;
+    animation: live-ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+  @keyframes live-ping {
+    75%,
+    100% {
+      transform: scale(2.6);
+      opacity: 0;
+    }
   }
 
   /* Numbers, dates, quantities, tags. */
@@ -265,11 +324,12 @@
     font-variant-numeric: tabular-nums;
     letter-spacing: -0.02em;
   }
+  /* Section labels: wide-spaced capitals, like a broadcast lower third. */
   .eyebrow {
-    font-family: var(--font-mono);
+    font-family: var(--font-sans);
     font-size: 0.6875rem;
-    font-weight: 500;
-    letter-spacing: 0.08em;
+    font-weight: 700;
+    letter-spacing: 0.2em;
     text-transform: uppercase;
   }
 }

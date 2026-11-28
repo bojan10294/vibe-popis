@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from 'react'
+import type { ButtonHTMLAttributes, CSSProperties, ReactNode } from 'react'
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger'
 
@@ -30,17 +30,29 @@ export function Button({
 }
 
 /** `interactive` for cards that are (inside) a link or button: they lift and glow on hover. */
+const BAR = { brand: 'var(--color-brand-500)', red: '#ef4444', green: '#1fa06c', amber: '#f59e0b' }
+
+/**
+ * `interactive` for cards that are (inside) a link or button: they lift and glow on hover.
+ * `accent` draws a colored bar down the left edge for the card that matters.
+ */
 export function Card({
   children,
   className = '',
   interactive = false,
+  accent,
 }: {
   children: ReactNode
   className?: string
   interactive?: boolean
+  accent?: 'brand' | 'red' | 'green' | 'amber'
 }) {
+  const bar = accent ? ({ '--bar': BAR[accent] } as CSSProperties) : undefined
   return (
-    <div className={`rounded-2xl border border-slate-200 bg-surface p-4 shadow-sm ${interactive ? 'lift' : ''} ${className}`}>
+    <div
+      style={bar}
+      className={`rounded-2xl border border-slate-200 bg-surface p-4 shadow-sm ${interactive ? 'lift' : ''} ${accent ? 'accent-bar pl-5' : ''} ${className}`}
+    >
       {children}
     </div>
   )
@@ -95,21 +107,24 @@ export function EmptyState({ title, hint }: { title: string; hint?: string }) {
   )
 }
 
+/** Status pill with a dot. `live` = something in progress right now (pulsing red dot). */
 export function Badge({
   children,
   tone = 'slate',
 }: {
   children: ReactNode
-  tone?: 'slate' | 'green' | 'red' | 'amber'
+  tone?: 'slate' | 'green' | 'red' | 'amber' | 'live'
 }) {
   const tones = {
-    slate: 'bg-slate-100 text-slate-600 border-slate-200',
-    green: 'bg-green-50 text-green-700 border-green-200',
-    red: 'bg-red-50 text-red-700 border-red-200',
-    amber: 'bg-amber-50 text-amber-700 border-amber-200',
+    slate: 'text-slate-600',
+    green: 'text-green-700',
+    red: 'text-red-700',
+    amber: 'text-amber-700',
+    live: 'text-slate-700',
   }
   return (
-    <span className={`eyebrow inline-flex items-center gap-1 rounded-md border px-2 py-0.5 ${tones[tone]}`}>
+    <span className={`pill !px-2.5 !py-1 !text-[10px] ${tones[tone]}`}>
+      {tone === 'live' ? <span className="live-dot" /> : <span className="h-1.5 w-1.5 rounded-full bg-current" />}
       {children}
     </span>
   )

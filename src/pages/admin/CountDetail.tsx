@@ -96,7 +96,7 @@ export function CountDetail() {
             {count.finished_at && <> · završeno {fmtDateTime(count.finished_at)}</>}
           </p>
           <div className="mt-1">
-            <Badge tone={count.status === 'finished' ? 'green' : 'amber'}>
+            <Badge tone={count.status === 'finished' ? 'green' : 'live'}>
               {count.status === 'finished' ? 'završeno' : 'u toku'}
             </Badge>
           </div>
