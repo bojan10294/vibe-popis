@@ -3,7 +3,7 @@ import { useCallback, useState } from 'react'
 export type Theme = 'light' | 'dark'
 
 const KEY = 'popis:theme'
-const BAR_COLOR: Record<Theme, string> = { light: '#ece8df', dark: '#0d0e0b' }
+const BAR_COLOR: Record<Theme, string> = { light: '#eceef1', dark: '#09090b' }
 
 /** Saved choice, else the phone's own setting. Mirrors the inline script in index.html. */
 export function currentTheme(): Theme {
