@@ -419,7 +419,7 @@ function QtyField({ line, onSave }: { line: OrderLine; onSave: (raw: string) => 
   const arrow = 'flex flex-1 items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-slate-900 active:bg-slate-200 disabled:opacity-30'
 
   return (
-    <div className="flex h-12 w-[8.5rem] shrink-0 items-stretch overflow-hidden rounded-xl border border-slate-200 bg-slate-50 focus-within:border-brand-500 focus-within:ring-4 focus-within:ring-brand-500/20">
+    <div className="flex h-12 w-[7rem] shrink-0 items-stretch overflow-hidden rounded-xl border border-slate-200 bg-slate-50 focus-within:border-brand-500 focus-within:ring-4 focus-within:ring-brand-500/20">
       <div className="flex w-9 shrink-0 flex-col divide-y divide-slate-200 border-r border-slate-200">
         <button type="button" onClick={() => step(1)} aria-label={`Povećaj ${line.article_name}`} className={arrow}>
           <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden="true">
@@ -451,7 +451,7 @@ function QtyField({ line, onSave }: { line: OrderLine; onSave: (raw: string) => 
         aria-label={`Količina za ${line.article_name}`}
         className="num h-full w-0 min-w-0 flex-1 bg-transparent pr-1 text-right text-lg font-semibold text-slate-900 outline-none"
       />
-      <span className="flex w-11 shrink-0 items-center pr-2 text-xs font-medium text-slate-500">{line.order_unit}</span>
+      <span className="flex w-10 shrink-0 items-center pr-1.5 text-xs font-medium text-slate-500">{line.order_unit}</span>
     </div>
   )
 }
