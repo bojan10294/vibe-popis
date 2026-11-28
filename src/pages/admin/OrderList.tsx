@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
   getCount,
@@ -272,18 +272,7 @@ export function OrderList() {
                       </p>
                     </div>
                     {!noteOnly(o) && (
-                      <label className="flex h-10 w-[6.5rem] shrink-0 items-center justify-end overflow-hidden rounded-xl border border-slate-200 bg-slate-50 focus-within:border-brand-500 focus-within:ring-4 focus-within:ring-brand-500/20">
-                        <input
-                          inputMode="decimal"
-                          defaultValue={String(o.suggested_order_qty)}
-                          onBlur={(e) => updateQty(o, e.target.value)}
-                          onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
-                          onFocus={(e) => e.currentTarget.select()}
-                          aria-label={`Količina za ${o.article_name}`}
-                          className="num h-full w-0 min-w-0 flex-1 bg-transparent pr-1 text-right text-lg font-semibold text-slate-900 outline-none"
-                        />
-                        <span className="w-11 shrink-0 pr-2 text-xs font-medium text-slate-500">{o.order_unit}</span>
-                      </label>
+                      <QtyField line={o} onSave={(v) => updateQty(o, v)} />
                     )}
                   </div>
                   {o.note && <p className="mt-1.5 text-sm font-medium text-red-600">Fali: {o.note}</p>}
@@ -411,6 +400,59 @@ function BookInfo({ row: r }: { row: CompareRow | undefined }) {
       </span>
       {r.untracked && <span className="text-slate-400">(knjigovođa vodi na 0)</span>}
     </span>
+  )
+}
+
+/** Količina za poručiti: ▲/▼ for ±1, or type a number. Clicks are saved shortly after the last one. */
+function QtyField({ line, onSave }: { line: OrderLine; onSave: (raw: string) => void }) {
+  const [value, setValue] = useState(String(line.suggested_order_qty))
+  const timer = useRef<number | undefined>(undefined)
+  useEffect(() => () => window.clearTimeout(timer.current), [])
+
+  const step = (delta: number) => {
+    const current = Number(value.replace(',', '.')) || 0
+    const next = String(Math.max(0, Math.round(current + delta)))
+    setValue(next)
+    window.clearTimeout(timer.current)
+    timer.current = window.setTimeout(() => onSave(next), 500)
+  }
+  const arrow = 'flex flex-1 items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-slate-900 active:bg-slate-200 disabled:opacity-30'
+
+  return (
+    <div className="flex h-12 w-[8.5rem] shrink-0 items-stretch overflow-hidden rounded-xl border border-slate-200 bg-slate-50 focus-within:border-brand-500 focus-within:ring-4 focus-within:ring-brand-500/20">
+      <div className="flex w-9 shrink-0 flex-col divide-y divide-slate-200 border-r border-slate-200">
+        <button type="button" onClick={() => step(1)} aria-label={`Povećaj ${line.article_name}`} className={arrow}>
+          <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden="true">
+            <path d="M10 6.5 15 12H5l5-5.5Z" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          onClick={() => step(-1)}
+          disabled={(Number(value.replace(',', '.')) || 0) <= 0}
+          aria-label={`Smanji ${line.article_name}`}
+          className={arrow}
+        >
+          <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden="true">
+            <path d="M10 13.5 5 8h10l-5 5.5Z" />
+          </svg>
+        </button>
+      </div>
+      <input
+        inputMode="decimal"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={() => {
+          window.clearTimeout(timer.current)
+          onSave(value)
+        }}
+        onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+        onFocus={(e) => e.currentTarget.select()}
+        aria-label={`Količina za ${line.article_name}`}
+        className="num h-full w-0 min-w-0 flex-1 bg-transparent pr-1 text-right text-lg font-semibold text-slate-900 outline-none"
+      />
+      <span className="flex w-11 shrink-0 items-center pr-2 text-xs font-medium text-slate-500">{line.order_unit}</span>
+    </div>
   )
 }
 
