@@ -225,11 +225,13 @@ export function OrderList() {
       ) : (
         groups.map((g) => (
           <section key={g.key || 'none'} className="space-y-1.5">
-            <div className="flex items-end justify-between gap-2 px-1">
-              <h2 className="text-sm font-bold text-slate-700">
-                🚚 {g.name} <span className="font-normal text-slate-400">({g.list.length})</span>
-                {g.phone && <span className="ml-2 text-xs font-normal text-slate-400">{g.phone}</span>}
-              </h2>
+            <div className="flex items-end justify-between gap-2 px-1 pt-2">
+              <div className="min-w-0">
+                <h2 className="text-lg font-bold leading-tight tracking-tight text-slate-900">
+                  {g.name} <span className="num text-sm font-medium text-slate-400">{g.list.length}</span>
+                </h2>
+                {g.phone && <p className="num text-xs text-slate-400">{g.phone}</p>}
+              </div>
               <button
                 onClick={() => copy(groupText(g), g.key || 'none')}
                 className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-brand-700 hover:bg-brand-50"
@@ -238,64 +240,69 @@ export function OrderList() {
               </button>
             </div>
             <SendButtons phone={g.phone} text={groupText(g)} supplierId={g.key} />
-            <div className="overflow-hidden rounded-xl border border-slate-200 bg-surface">
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-surface shadow-sm">
               {PAYMENTS.map(([p, label]) => {
                 const list = g.list.filter((o) => pay(o) === p)
                 if (!list.length) return null
                 return (
                   <div key={p} className="border-t border-slate-100 first:border-t-0">
                     <p
-                      className={`px-3 py-1 eyebrow ${
+                      className={`eyebrow flex items-center gap-2 px-4 py-2 ${
                         p === 'cash' ? 'bg-amber-50 text-amber-700' : 'bg-slate-50 text-slate-500'
                       }`}
                     >
-                      {p === 'cash' ? '💵' : '🧾'} {label} ({list.length})
+                      <span className={`h-1.5 w-1.5 rounded-full ${p === 'cash' ? 'bg-amber-500' : 'bg-slate-400'}`} />
+                      {label} <span className="num tracking-normal">{list.length}</span>
                     </p>
                     <div className="divide-y divide-slate-100">
               {list.map((o) => (
-                <div key={o.id} className="flex items-center gap-2 px-3 py-2 sm:gap-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium leading-tight text-slate-800">{o.article_name}</p>
-                    <p className="text-xs text-slate-400">
-                      {o.kind === 'yes_no'
-                        ? 'označeno: nema'
-                        : noteOnly(o)
-                          ? `ima ${formatNum(o.counted)} ${o.unit}`
-                          : `ima ${formatNum(o.counted)} ${o.unit} · ${weekend ? 'treba' : artById.get(o.article_id)?.regular_target != null ? 'poželjno' : 'min'} ${formatNum(o.minimum)}`}
-                    </p>
-                    {o.note && <p className="mt-0.5 text-sm font-medium text-red-600">Fali: {o.note}</p>}
-                    <ArrivalBadge a={arrivalOf(o)} />
-                    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs">
-                      <BookInfo row={rowOf(o)} />
+                <div key={o.id} className="px-4 py-3">
+                  <div className="flex items-start gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold leading-tight text-slate-900">{o.article_name}</p>
+                      <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500 tabular-nums">
+                        <span>
+                          {o.kind === 'yes_no'
+                            ? 'označeno: nema'
+                            : noteOnly(o)
+                              ? `ima ${formatNum(o.counted)} ${o.unit}`
+                              : `ima ${formatNum(o.counted)} ${o.unit} · ${weekend ? 'treba' : artById.get(o.article_id)?.regular_target != null ? 'poželjno' : 'min'} ${formatNum(o.minimum)}`}
+                        </span>
+                        <ArrivalBadge a={arrivalOf(o)} />
+                      </p>
+                    </div>
+                    {!noteOnly(o) && (
+                      <label className="flex h-10 w-[6.5rem] shrink-0 items-center justify-end overflow-hidden rounded-xl border border-slate-200 bg-slate-50 focus-within:border-brand-500 focus-within:ring-4 focus-within:ring-brand-500/20">
+                        <input
+                          inputMode="decimal"
+                          defaultValue={String(o.suggested_order_qty)}
+                          onBlur={(e) => updateQty(o, e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+                          onFocus={(e) => e.currentTarget.select()}
+                          aria-label={`Količina za ${o.article_name}`}
+                          className="num h-full w-0 min-w-0 flex-1 bg-transparent pr-1 text-right text-lg font-semibold text-slate-900 outline-none"
+                        />
+                        <span className="w-11 shrink-0 pr-2 text-xs font-medium text-slate-500">{o.order_unit}</span>
+                      </label>
+                    )}
+                  </div>
+                  {o.note && <p className="mt-1.5 text-sm font-medium text-red-600">Fali: {o.note}</p>}
+                  <div className="mt-2.5 flex items-center justify-between gap-2">
+                    <BookInfo row={rowOf(o)} />
+                    <div className="flex shrink-0 items-center gap-1">
+                      <PayToggle value={pay(o)} onToggle={() => togglePayment(o)} />
                       <button
-                        onClick={() => togglePayment(o)}
-                        className="-mx-1.5 rounded-md px-1.5 py-0.5 font-medium text-brand-700 hover:bg-brand-50"
+                        onClick={() => removeLine(o)}
+                        aria-label={`Ukloni ${o.article_name} sa liste`}
+                        title="Ukloni sa liste"
+                        className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-red-50 hover:text-red-600"
                       >
-                        {pay(o) === 'cash' ? 'prebaci na račun' : 'prebaci na keš'}
+                        <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden="true">
+                          <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 1 0 .23 1.482l.149-.022.841 10.518A2.75 2.75 0 0 0 7.596 19h4.807a2.75 2.75 0 0 0 2.742-2.53l.841-10.52.149.023a.75.75 0 0 0 .23-1.482A41.03 41.03 0 0 0 14 4.193V3.75A2.75 2.75 0 0 0 11.25 1h-2.5ZM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4ZM8.58 7.72a.75.75 0 0 0-1.5.06l.3 7.5a.75.75 0 1 0 1.5-.06l-.3-7.5Zm4.34.06a.75.75 0 1 0-1.5-.06l-.3 7.5a.75.75 0 1 0 1.5.06l.3-7.5Z" clipRule="evenodd" />
+                        </svg>
                       </button>
                     </div>
                   </div>
-                  <div className={`flex shrink-0 items-center gap-1 ${noteOnly(o) ? 'hidden' : ''}`}>
-                    <input
-                      inputMode="decimal"
-                      defaultValue={String(o.suggested_order_qty)}
-                      onBlur={(e) => updateQty(o, e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
-                      aria-label={`Količina za ${o.article_name}`}
-                      className="w-14 rounded-lg border border-slate-300 bg-surface px-2 py-1 text-right font-semibold text-slate-800 outline-none focus:border-brand-500"
-                    />
-                    <span className="w-11 text-xs text-slate-500">{o.order_unit}</span>
-                  </div>
-                  <button
-                    onClick={() => removeLine(o)}
-                    aria-label={`Ukloni ${o.article_name} sa liste`}
-                    title="Ukloni sa liste"
-                    className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
-                  >
-                    <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4" aria-hidden="true">
-                      <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 1 0 .23 1.482l.149-.022.841 10.518A2.75 2.75 0 0 0 7.596 19h4.807a2.75 2.75 0 0 0 2.742-2.53l.841-10.52.149.023a.75.75 0 0 0 .23-1.482A41.03 41.03 0 0 0 14 4.193V3.75A2.75 2.75 0 0 0 11.25 1h-2.5ZM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4ZM8.58 7.72a.75.75 0 0 0-1.5.06l.3 7.5a.75.75 0 1 0 1.5-.06l-.3-7.5Zm4.34.06a.75.75 0 1 0-1.5-.06l-.3 7.5a.75.75 0 1 0 1.5.06l.3-7.5Z" clipRule="evenodd" />
-                    </svg>
-                  </button>
                 </div>
               ))}
                     </div>
@@ -320,7 +327,7 @@ function SendButtons({ phone, text, supplierId }: { phone: string | null; text: 
       </p>
     )
   }
-  const btn = 'rounded-lg border border-slate-200 bg-surface px-2.5 py-1 text-xs font-semibold shadow-sm hover:bg-slate-50'
+  const btn = 'rounded-full border border-slate-200 bg-surface px-3 py-1.5 text-xs font-semibold shadow-sm hover:bg-slate-50'
   const viber = async () => {
     // Viber can't prefill text for a number: copy it, then open the chat to paste.
     try {
@@ -340,11 +347,11 @@ function SendButtons({ phone, text, supplierId }: { phone: string | null; text: 
   }
   return (
     <div className="flex flex-wrap items-center gap-1.5 px-1">
-      <span className="text-xs text-slate-400">Pošalji:</span>
+      <span className="eyebrow mr-0.5 text-slate-400">Pošalji</span>
       <a href={whatsappUrl(phone, text) ?? undefined} target="_blank" rel="noreferrer" className={`${btn} text-green-700`}>
         WhatsApp
       </a>
-      <button onClick={viber} className={`${btn} text-violet-700`} title="Tekst se kopira — u Viberu samo nalepi">
+      <button onClick={viber} className={`${btn} text-violet-700 dark:text-violet-300`} title="Tekst se kopira — u Viberu samo nalepi">
         Viber
       </button>
       <a href={smsUrl(phone, text) ?? undefined} className={`${btn} text-slate-700`}>
@@ -362,32 +369,76 @@ function SendButtons({ phone, text, supplierId }: { phone: string | null; text: 
 /** Naručeno vs stiglo on the line: what the fakture after this Popis brought. */
 function ArrivalBadge({ a }: { a: ArrivalLine | undefined }) {
   if (!a) return null
-  if (a.status === 'ok') return <p className="mt-0.5 text-xs font-semibold text-green-700">✓ stiglo</p>
+  if (a.status === 'ok') return <span className="font-semibold text-green-700">✓ stiglo</span>
   if (a.status === 'short') {
     return (
-      <p className="mt-0.5 text-xs font-semibold text-amber-700">
-        stiglo {formatNum(a.arrivedBase)} od {formatNum(a.orderedBase)} {a.baseUnit}
-      </p>
+      <span className="num font-semibold text-amber-700">
+        stiglo {formatNum(a.arrivedBase)}/{formatNum(a.orderedBase)} {a.baseUnit}
+      </span>
     )
   }
-  return <p className="mt-0.5 text-xs text-slate-400">još nije stiglo</p>
+  return (
+    <span className="inline-flex items-center gap-1 text-slate-400">
+      <span className="h-1 w-1 rounded-full bg-current" />
+      nije stiglo
+    </span>
+  )
 }
 
 /** "knj. 92,84 l · manjak 72,84 l" — the accountant's book stock vs. this Popis. */
 function BookInfo({ row: r }: { row: CompareRow | undefined }) {
-  if (!r) return <span className="text-slate-400">nije povezano sa knjigovodstvom</span>
+  if (!r) return <span className="text-xs text-slate-400">nije u knjigovodstvu</span>
   const u = bookUnitLabel(r.unit)
   const group = r.members.length > 1 ? ` (${r.name})` : ''
-  if (r.counted == null) return <span className="text-slate-400">knj. {formatNum(r.book)} {u}{group}</span>
-  const short = (r.diff ?? 0) < 0
-  const tone = r.ok ? 'text-slate-500' : short ? 'text-red-600' : 'text-green-600'
-  return (
-    <span className={tone}>
+  const book = (
+    <span className="num text-slate-500">
       knj. {formatNum(r.book)} {u}
-      {group} ·{' '}
-      {r.ok ? 'slaže se' : `${short ? 'manjak' : 'višak'} ${formatNum(Math.abs(r.diff!))} ${u}`}
-      {r.untracked && ' (knjigovođa vodi na 0)'}
+      {group}
     </span>
+  )
+  if (r.counted == null) return <span className="min-w-0 text-xs">{book}</span>
+  const short = (r.diff ?? 0) < 0
+  const chip = r.ok
+    ? 'text-slate-500'
+    : short
+      ? 'border border-red-200 bg-red-50 text-red-700'
+      : 'border border-green-200 bg-green-50 text-green-700'
+  return (
+    <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-xs">
+      {book}
+      <span className={`num rounded-md px-1.5 py-0.5 font-semibold ${chip}`}>
+        {r.ok ? '= slaže se' : `${short ? '−' : '+'}${formatNum(Math.abs(r.diff!))} ${u}`}
+      </span>
+      {r.untracked && <span className="text-slate-400">(knjigovođa vodi na 0)</span>}
+    </span>
+  )
+}
+
+/** Račun | Keš — shows where the line is paid, one tap moves it to the other. */
+function PayToggle({ value, onToggle }: { value: Payment; onToggle: () => void }) {
+  const opt = (p: Payment, label: string) => (
+    <span
+      className={`rounded-full px-2.5 py-1 ${
+        value === p
+          ? p === 'cash'
+            ? 'bg-amber-500 text-white shadow-sm'
+            : 'bg-ink text-on-ink shadow-sm'
+          : 'text-slate-500'
+      }`}
+    >
+      {label}
+    </span>
+  )
+  return (
+    <button
+      onClick={onToggle}
+      aria-label={value === 'cash' ? 'Prebaci na račun' : 'Prebaci na keš'}
+      title={value === 'cash' ? 'Prebaci na račun' : 'Prebaci na keš'}
+      className="flex items-center rounded-full border border-slate-200 bg-slate-50 p-0.5 text-[11px] font-bold uppercase tracking-wider"
+    >
+      {opt('invoice', 'Račun')}
+      {opt('cash', 'Keš')}
+    </button>
   )
 }
 
