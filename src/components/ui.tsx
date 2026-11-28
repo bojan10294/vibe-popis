@@ -6,11 +6,11 @@ type Variant = 'primary' | 'secondary' | 'ghost' | 'danger'
 // remapped in dark mode (see index.css), brightness works in both themes.
 const variants: Record<Variant, string> = {
   primary:
-    'bg-brand-600 text-on-brand border border-black/10 shadow-[inset_0_1px_0_rgb(255_255_255/0.22)] hover:-translate-y-px hover:brightness-105 hover:shadow-[inset_0_1px_0_rgb(255_255_255/0.22),0_0_0_4px_rgb(61_92_255/0.25)]',
+    'bg-brand-600 text-on-brand border border-black/10 shadow-[inset_0_1px_0_rgb(255_255_255/0.1)] hover:-translate-y-px hover:brightness-105 hover:shadow-[inset_0_1px_0_rgb(255_255_255/0.1),0_0_0_4px_rgb(61_92_255/0.25)]',
   secondary: 'bg-surface text-slate-800 border border-slate-200 shadow-sm hover:-translate-y-px hover:bg-slate-50',
   ghost: 'bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900',
   danger:
-    'bg-red-600 text-white border border-black/10 shadow-[inset_0_1px_0_rgb(255_255_255/0.25)] hover:-translate-y-px hover:brightness-110',
+    'bg-red-600 text-white border border-black/10 shadow-[inset_0_1px_0_rgb(255_255_255/0.1)] hover:-translate-y-px hover:brightness-110',
 }
 
 export function Button({
